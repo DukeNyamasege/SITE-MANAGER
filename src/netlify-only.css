@@ -1,0 +1,31 @@
+.wizard-nav--six {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.startup-alert {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: min(92vw, 680px);
+}
+
+@media (max-width: 980px) {
+  .wizard-nav--six {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .wizard-nav--six {
+    grid-template-columns: 1fr;
+  }
+}
