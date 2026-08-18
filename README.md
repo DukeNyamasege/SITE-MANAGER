@@ -1,51 +1,80 @@
 # SITE-MANAGER
 
-A domain-scoped administration app for managing bot libraries and site navigation/theme settings deployed by `DukeNyamasege/nnn`.
+A domain-scoped control plane for websites served by `DukeNyamasege/nnn`.
 
-## Domain access model
+SITE-MANAGER is intentionally **Netlify-only**. It does not require a VPS, Namecheap API key, fixed IP, or registrar automation. GitHub and Netlify tasks are automated; registrar DNS is the one manual infrastructure step.
 
-There is no global manager password and no domain dropdown after login.
+## Domain entry
 
-The single login input is the domain to manage, in lowercase. For example:
+The access screen starts blank and does not expose a domain list or example domain. The user types the domain they want to work with.
+
+- If the domain already exists in `nnn/brand.config.json`, SITE-MANAGER opens the **Existing Website Wizard** for only that domain.
+- If the domain does not exist, SITE-MANAGER opens the **New Site Setup Wizard**.
+- `www.` is normalized when resolving a configured domain.
+- The server keeps every session scoped to exactly one site/domain.
+
+## Existing Website Wizard
+
+Existing sites use a five-step guided workflow instead of the old editor dropdown:
+
+1. **Website** — review domain, site ID, website URL, Deriv redirect URI, client/App ID, environment and OAuth scopes.
+2. **Navigation** — drag/reorder navigation items, remove optional sections, add available hidden sections, and customize theme colors.
+3. **Bots** — upload XML bots, remove bots, and drag them into first-to-last order.
+4. **Review** — see which areas have unpublished changes.
+5. **Publish** — publish only the changed areas through GitHub validation and then Netlify deployment.
+
+Changes made in Navigation and Bots are kept together in the wizard until Publish. If both areas changed, they are published sequentially so the Git history remains clear and each change gets the target Node 22/24 validation.
+
+## New Site Setup Wizard
+
+Unknown domains use a six-step wizard:
+
+1. **Verify domain** — add a generated TXT record manually at the DNS provider and let the Netlify Function verify it after propagation.
+2. **Deriv setup** — enter the Deriv OAuth client/App ID, environment and scopes for the exact HTTPS callback.
+3. **Navigation** — choose the initial sections/order and theme colors.
+4. **Bots** — optionally upload the initial XML bot library.
+5. **Review** — review the complete site configuration.
+6. **Deploy** — create the target GitHub provisioning PR, wait for Node 22/24 validation, merge it, attach the domain aliases to Netlify, and show the manual DNS records.
+
+The Deriv application itself must already be registered at Deriv with the exact callback URI shown by the wizard. SITE-MANAGER stores and deploys that configuration; it does not create Deriv applications.
+
+## Netlify-only domain flow
+
+After source provisioning succeeds, SITE-MANAGER uses the Netlify API to attach both the apex domain and `www` alias to the configured Netlify site.
+
+DNS remains manual by design. The wizard displays:
 
 ```text
-kicktrade.site
+@    ALIAS  -> apex-loadbalancer.netlify.com
+www  CNAME  -> <your-site>.netlify.app
 ```
 
-If that domain exists in `DukeNyamasege/nnn/brand.config.json`, the server creates a domain-scoped session. That session can only read, edit, publish, and monitor updates for that one site. To manage another site, use **Change domain**, then enter that other domain.
+If the DNS provider does not support apex ALIAS records, the wizard also shows the Netlify fallback A record.
 
-`www.` is normalized away when matching a configured domain, so a site configured as `www.kicktrade.site` is still accessed with `kicktrade.site`.
+After the user updates DNS, the wizard provides **Check DNS & SSL**. The Netlify Function checks/provisions TLS using the Netlify API. No registrar credentials are stored anywhere in SITE-MANAGER.
 
-The session cookie is signed server-side using the existing `GITHUB_TOKEN`; no separate `MANAGER_PASSWORD` or `SESSION_SECRET` environment variable is required.
+## GitHub publishing
 
-> Note: a domain name is public information, so this access model is intentionally domain-scoped rather than strong secret authentication. Anyone who knows a managed domain name could attempt to enter it. The server still strictly prevents a session for one domain from reading or publishing another domain.
+Bot and site settings updates use domain-specific Git messages such as:
 
-## Editors
+```text
+Update bots on kicktrade.site
+Update navigation and theme on kicktrade.site
+Provision new site riskmanagers.site
+```
 
-After login, the operator chooses what to update:
+Every publish uses:
 
-### Bot Library
+```text
+SITE-MANAGER
+  -> temporary target branch
+  -> pull request
+  -> Node 22 / Node 24 compatibility checks
+  -> merge to nnn/main
+  -> target Netlify deployment
+```
 
-- Shows only the currently published bot list for the authenticated domain.
-- Accepts one or multiple Blockly `.xml` bot uploads.
-- Lets the operator delete bots from that domain.
-- Lets the operator drag bots into first-to-last display order.
-- Bot publish commits use a clear subject such as `Update bots on kicktrade.site` and include added/removed bot names plus whether order changed.
-
-### Navigation & Theme
-
-- Loads the navigation feature catalog from `DukeNyamasege/nnn/public/site-config/catalog.json`.
-- Shows the current navigation items for that domain.
-- Lets the operator drag visible features into a new order.
-- Lets the operator remove optional features.
-- Lets the operator add back only features already available in the target template.
-- Keeps required items such as Dashboard from being removed.
-- Lets the operator change primary, secondary, navigation background, navigation text, and header background colors.
-- Publishes a domain-specific configuration to `public/site-config/domains/<site-id>.json`.
-
-Both editors publish through a temporary GitHub branch and pull request, wait for the target `Node.js compatibility` workflow, and merge to target `main` only when validation succeeds. Netlify then deploys the updated target repository normally.
-
-The GitHub token never enters the React bundle. All GitHub reads/writes and session signing happen inside Netlify Functions.
+The GitHub token never reaches the React bundle.
 
 ## Target repository contract
 
@@ -73,47 +102,35 @@ Domain navigation/theme configuration:
 public/site-config/domains/<site-id>.json
 ```
 
-If a bot manifest does not yet exist, the manager displays the shared library from `public/free-bots/bots.json`. If a site customization file does not exist, the manager displays the defaults from `public/site-config/catalog.json`. The first Publish creates that domain's independent configuration.
-
-## Netlify setup
-
-Connect this repository to a Netlify site. The included `netlify.toml` builds the React app and exposes the server functions under `/api/*`.
-
-Create these **server-side Netlify environment variables**:
+New sites are also added to:
 
 ```text
-GITHUB_TOKEN=<classic GitHub token with write access to DukeNyamasege/nnn>
-TARGET_REPO=DukeNyamasege/nnn
-TARGET_BRANCH=main
+brand.config.json -> sites.entries
 ```
 
-Do not prefix the GitHub token with `VITE_`. Values prefixed with `VITE_` can be bundled into browser code.
+## Netlify environment variables
 
-### GitHub token
+Configure these as **server-side** environment variables on the SITE-MANAGER Netlify project:
 
-Use a token that can read/write the target repository, create branches and pull requests, read its Actions workflow status, and merge pull requests. Store it only in Netlify's server environment.
+```text
+GITHUB_TOKEN=<GitHub token with target repo write/PR/workflow access>
+TARGET_REPO=DukeNyamasege/nnn
+TARGET_BRANCH=main
 
-## Publish sequence
+DOMAIN_VERIFICATION_SECRET=<optional random HMAC secret>
 
-1. Enter the lowercase domain to manage, for example `kicktrade.site`.
-2. SITE-MANAGER locks the session to that domain.
-3. Choose **Bot Library** or **Navigation & Theme**.
-4. Make local changes.
-5. Click **Publish**.
-6. SITE-MANAGER verifies again that the requested site matches the authenticated domain session.
-7. It reads the latest target `main` SHA.
-8. It creates a domain-scoped temporary branch.
-9. It writes the selected domain configuration in a commit whose subject includes the domain.
-10. It opens a pull request to target `main`.
-11. The browser polls only that domain's publish status while the target Node 22/24 workflow runs.
-12. When validation succeeds, the backend merges the PR and removes the temporary branch.
-13. Netlify sees the new target `main` revision and deploys the relevant sites.
+NETLIFY_ACCESS_TOKEN=<Netlify personal access token>
+NETLIFY_SITE_ID=<target trading-template Netlify site ID>
+NETLIFY_SITE_HOSTNAME=<target>.netlify.app
+```
 
-A session authenticated for one domain is rejected if it tries to request another site's data, publish another site's configuration, or monitor/merge another site's Site Manager PR.
+Do not prefix these values with `VITE_`.
+
+There are deliberately **no** `PROVISIONER_*`, `NAMECHEAP_*`, VPS, or fixed-IP variables.
 
 ## Local development
 
-Create a local `.env` from `.env.example`, then run with Netlify Dev so the functions and frontend share one origin:
+Use Netlify Dev so frontend and functions share one origin:
 
 ```bash
 npm install
@@ -128,10 +145,9 @@ npm run dev
 
 ## Security notes
 
-- The single login value is the configured domain name, normalized to lowercase and without `www.`.
-- The HttpOnly cookie contains the authorized `site_id` and is HMAC-signed server-side with the GitHub token.
-- `GITHUB_TOKEN` is never returned to the client.
-- Every domain-sensitive API verifies the authenticated `site_id` before reading or writing.
-- Uploaded XML is limited to 1.5 MB per file and must contain Blockly XML/block structure.
-- Only domain IDs present in the target `brand.config.json` can be published.
-- Only assets owned by the authenticated domain under `uploads/<site-id>/` are eligible for automatic deletion.
+- Existing sessions are scoped to one configured `site_id`.
+- Unknown domains must pass DNS TXT ownership verification before `provision-site` can write them to the target repository.
+- The ownership check is repeated server-side; bypassing the browser wizard does not bypass verification.
+- `GITHUB_TOKEN` and `NETLIFY_ACCESS_TOKEN` stay in Netlify Functions.
+- XML files are limited to 1.5 MB and must contain Blockly XML/block structure.
+- Registrar DNS credentials are never requested or stored.
