@@ -93,6 +93,20 @@ export type OnboardingResponse = {
   };
 };
 
+export type DomainVerificationResponse = {
+  verified: boolean;
+  domain: string;
+  method?: 'namecheap-account' | 'dns-txt' | string;
+  message?: string;
+  automatic_namecheap_check?: boolean;
+  record?: {
+    name: string;
+    host: string;
+    type: 'TXT' | string;
+    value: string;
+  };
+};
+
 export type PublishResponse = {
   status: 'pending' | 'no_changes' | 'already_configured';
   pr?: number;
