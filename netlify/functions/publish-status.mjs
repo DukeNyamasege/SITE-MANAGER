@@ -9,8 +9,12 @@ export const handler = async event => {
     if (!Number.isInteger(prNumber) || prNumber <= 0) throw new HttpError(400, 'A valid pull request number is required.');
 
     const pr = await github(`pulls/${prNumber}`);
-    const expectedPrefix = `bot-manager/${authorizedSiteId}-`;
-    if (pr?.base?.ref !== TARGET_BRANCH || !String(pr?.head?.ref || '').startsWith(expectedPrefix)) {
+    const allowedPrefixes = [
+      `bot-manager/${authorizedSiteId}-`,
+      `site-manager/${authorizedSiteId}-`,
+    ];
+    const headRef = String(pr?.head?.ref || '');
+    if (pr?.base?.ref !== TARGET_BRANCH || !allowedPrefixes.some(prefix => headRef.startsWith(prefix))) {
       throw new HttpError(403, 'This session can only inspect and merge publishes for its authenticated domain.');
     }
 
@@ -73,7 +77,7 @@ export const handler = async event => {
         body: JSON.stringify({
           sha: headSha,
           merge_method: 'merge',
-          commit_title: `Publish managed bots (PR #${prNumber})`,
+          commit_title: `${pr.title} (PR #${prNumber})`,
         }),
       });
     } catch (error) {
