@@ -37,8 +37,5 @@ jobs:
             node --check "$file"
           done
 
-      - name: Validate fixed-IP provisioner
-        run: node --check provisioner/server.mjs
-
       - name: Build production bundle
         run: npm run build
