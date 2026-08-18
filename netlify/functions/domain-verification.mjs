@@ -9,8 +9,9 @@ export const handler = async event => {
       return json(200, {
         verified: false,
         domain: session.domain,
+        method: 'dns-txt',
         record: verificationRecordForDomain(session.domain),
-        automatic_namecheap_check: Boolean(process.env.PROVISIONER_URL && process.env.PROVISIONER_SECRET),
+        message: 'Add the TXT record at your DNS provider, then check ownership from the wizard.',
       });
     }
 
