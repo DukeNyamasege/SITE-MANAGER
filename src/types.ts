@@ -40,6 +40,28 @@ export type BotsResponse = {
   bots: BotMeta[];
 };
 
+export type NavigationFeature = {
+  id: string;
+  label: string;
+  required?: boolean;
+};
+
+export type ThemeColors = {
+  primary: string;
+  secondary: string;
+  nav_background: string;
+  nav_text: string;
+  header_background: string;
+};
+
+export type SiteSettingsResponse = {
+  site: Domain;
+  inherited: boolean;
+  catalog: NavigationFeature[];
+  navigation: string[];
+  colors: ThemeColors;
+};
+
 export type PublishResponse = {
   status: 'pending' | 'no_changes';
   pr?: number;
