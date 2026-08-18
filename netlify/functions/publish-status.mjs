@@ -12,6 +12,7 @@ export const handler = async event => {
     const allowedPrefixes = [
       `bot-manager/${authorizedSiteId}-`,
       `site-manager/${authorizedSiteId}-`,
+      `site-provisioner/${authorizedSiteId}-`,
     ];
     const headRef = String(pr?.head?.ref || '');
     if (pr?.base?.ref !== TARGET_BRANCH || !allowedPrefixes.some(prefix => headRef.startsWith(prefix))) {
