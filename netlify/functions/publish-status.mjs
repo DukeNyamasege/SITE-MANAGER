@@ -3,14 +3,15 @@ import { HttpError, TARGET_BRANCH, errorResponse, github, json, requireAuth } fr
 export const handler = async event => {
   try {
     if (event.httpMethod !== 'GET') throw new HttpError(405, 'Method not allowed.');
-    requireAuth(event);
+    const authorizedSiteId = requireAuth(event);
 
     const prNumber = Number(event.queryStringParameters?.pr);
     if (!Number.isInteger(prNumber) || prNumber <= 0) throw new HttpError(400, 'A valid pull request number is required.');
 
     const pr = await github(`pulls/${prNumber}`);
-    if (pr?.base?.ref !== TARGET_BRANCH || !String(pr?.head?.ref || '').startsWith('bot-manager/')) {
-      throw new HttpError(400, 'This pull request was not created by Site Manager.');
+    const expectedPrefix = `bot-manager/${authorizedSiteId}-`;
+    if (pr?.base?.ref !== TARGET_BRANCH || !String(pr?.head?.ref || '').startsWith(expectedPrefix)) {
+      throw new HttpError(403, 'This session can only inspect and merge publishes for its authenticated domain.');
     }
 
     if (pr.merged) {

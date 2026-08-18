@@ -1,22 +1,14 @@
-import crypto from 'node:crypto';
-import { HttpError, createSessionToken, errorResponse, json, parseJsonBody, sessionCookie } from './_lib.mjs';
-
-const safeEqual = (left, right) => {
-  const a = Buffer.from(String(left));
-  const b = Buffer.from(String(right));
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-};
+import { HttpError, createSessionToken, errorResponse, getSiteByDomainPassword, json, parseJsonBody, sessionCookie } from './_lib.mjs';
 
 export const handler = async event => {
   try {
     if (event.httpMethod !== 'POST') throw new HttpError(405, 'Method not allowed.');
-    const expected = process.env.MANAGER_PASSWORD;
-    if (!expected || expected.length < 8) throw new HttpError(500, 'MANAGER_PASSWORD is not configured securely.');
 
     const { password } = parseJsonBody(event);
-    if (!safeEqual(password || '', expected)) throw new HttpError(401, 'Incorrect manager password.');
+    const site = await getSiteByDomainPassword(password);
+    if (!site) throw new HttpError(401, 'Domain not recognized. Enter the managed domain in lowercase, for example kicktrade.site.');
 
-    return json(200, { ok: true }, { 'Set-Cookie': sessionCookie(createSessionToken()) });
+    return json(200, { ok: true, site }, { 'Set-Cookie': sessionCookie(createSessionToken(site.id)) });
   } catch (error) {
     return errorResponse(error);
   }

@@ -2,10 +2,28 @@
 
 A small administration app for managing the domain-specific XML bot libraries deployed by `DukeNyamasege/nnn`.
 
+## Domain access model
+
+There is no global manager password and no domain dropdown after login.
+
+The single login input is the domain to manage, in lowercase. For example:
+
+```text
+kicktrade.site
+```
+
+If that domain exists in `DukeNyamasege/nnn/brand.config.json`, the server creates a domain-scoped session. That session can only read, edit, publish, and monitor bot updates for that one site. To manage another site, use **Change domain**, then enter that other domain.
+
+`www.` is normalized away when matching a configured domain, so a site configured as `www.kicktrade.site` is still accessed with `kicktrade.site`.
+
+The session cookie is signed server-side using the existing `GITHUB_TOKEN`; no separate `MANAGER_PASSWORD` or `SESSION_SECRET` environment variable is required.
+
+> Note: a domain name is public information, so this access model is intentionally domain-scoped rather than strong secret authentication. Anyone who knows a managed domain name could attempt to enter it. The server still strictly prevents a session for one domain from reading or publishing another domain.
+
 ## What version 1 does
 
-- Loads every managed domain from `DukeNyamasege/nnn/brand.config.json`.
-- Shows the currently published bot list for the selected domain.
+- Resolves the entered domain against `DukeNyamasege/nnn/brand.config.json`.
+- Shows only the currently published bot list for that authenticated domain.
 - Accepts one or multiple Blockly `.xml` bot uploads.
 - Lets the operator delete bots from that domain.
 - Lets the operator drag bots into first-to-last display order.
@@ -14,11 +32,11 @@ A small administration app for managing the domain-specific XML bot libraries de
 - Merges to target `main` only when that workflow succeeds.
 - Netlify can then deploy the updated target repository normally.
 
-The GitHub token never enters the React bundle. All GitHub writes happen inside Netlify Functions.
+The GitHub token never enters the React bundle. All GitHub reads/writes and session signing happen inside Netlify Functions.
 
 ## Target repository contract
 
-The target repository is already prepared to read domain manifests from:
+The target repository reads domain manifests from:
 
 ```text
 public/free-bots/domains/<site-id>.json
@@ -34,7 +52,7 @@ If a domain manifest does not yet exist, the manager displays the shared library
 
 ## Netlify setup
 
-Connect this repository to a new Netlify site. The included `netlify.toml` builds the React app and exposes the server functions under `/api/*`.
+Connect this repository to a Netlify site. The included `netlify.toml` builds the React app and exposes the server functions under `/api/*`.
 
 Create these **server-side Netlify environment variables**:
 
@@ -42,11 +60,9 @@ Create these **server-side Netlify environment variables**:
 GITHUB_TOKEN=<classic GitHub token with write access to DukeNyamasege/nnn>
 TARGET_REPO=DukeNyamasege/nnn
 TARGET_BRANCH=main
-MANAGER_PASSWORD=<strong manager login password>
-SESSION_SECRET=<random secret, at least 24 characters>
 ```
 
-Do not prefix any secret with `VITE_`. Values prefixed with `VITE_` can be bundled into browser code.
+Do not prefix the GitHub token with `VITE_`. Values prefixed with `VITE_` can be bundled into browser code.
 
 ### GitHub token
 
@@ -54,18 +70,20 @@ Use a token that can read/write the target repository, create branches and pull 
 
 ## Publish sequence
 
-1. Select a domain.
-2. Add/delete/reorder bots locally.
-3. Click **Publish**.
-4. SITE-MANAGER reads the latest target `main` SHA.
-5. It creates a `bot-manager/<site>-<timestamp>` branch.
-6. It writes the selected domain manifest and any new/deleted site-owned assets in one commit.
-7. It opens a pull request to target `main`.
-8. The browser polls the Site Manager status endpoint while the target Node 22/24 workflow runs.
-9. When validation succeeds, the backend merges the PR and removes the temporary branch.
-10. Netlify sees the new target `main` revision and deploys the relevant sites.
+1. Enter the lowercase domain to manage, for example `kicktrade.site`.
+2. SITE-MANAGER locks the session to that domain and loads only its bot list.
+3. Add/delete/reorder bots locally.
+4. Click **Publish**.
+5. SITE-MANAGER verifies again that the requested site matches the authenticated domain session.
+6. It reads the latest target `main` SHA.
+7. It creates a `bot-manager/<site>-<timestamp>` branch.
+8. It writes the selected domain manifest and any new/deleted site-owned assets in one commit.
+9. It opens a pull request to target `main`.
+10. The browser polls only that domain's publish status while the target Node 22/24 workflow runs.
+11. When validation succeeds, the backend merges the PR and removes the temporary branch.
+12. Netlify sees the new target `main` revision and deploys the relevant sites.
 
-If target `main` changes and the PR conflicts, the manager refuses to merge; reload that domain and publish again.
+A session authenticated for one domain is rejected if it tries to request another site's bot list, publish another site's manifest, or monitor/merge another site's Site Manager PR.
 
 ## Local development
 
@@ -84,9 +102,10 @@ npm run dev
 
 ## Security notes
 
-- Authentication is an HttpOnly signed session cookie.
-- `MANAGER_PASSWORD` is checked only by the server function.
-- `GITHUB_TOKEN` and `SESSION_SECRET` are never returned to the client.
+- The single login value is the configured domain name, normalized to lowercase and without `www.`.
+- The HttpOnly cookie contains the authorized `site_id` and is HMAC-signed server-side with the GitHub token.
+- `GITHUB_TOKEN` is never returned to the client.
+- Every domain-sensitive API verifies the authenticated `site_id` before reading or writing.
 - Uploaded XML is limited to 1.5 MB per file and must contain Blockly XML/block structure.
 - Only domain IDs present in the target `brand.config.json` can be published.
-- Only assets owned by the selected domain under `uploads/<site-id>/` are eligible for automatic deletion.
+- Only assets owned by the authenticated domain under `uploads/<site-id>/` are eligible for automatic deletion.

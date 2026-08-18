@@ -87,24 +87,26 @@ function Login({ onSuccess }: { onSuccess: () => Promise<void> }) {
     <main className="login-shell">
       <section className="login-card">
         <div className="brand-mark">SM</div>
-        <p className="eyebrow">DERIV SITE OPERATIONS</p>
+        <p className="eyebrow">DOMAIN BOT ACCESS</p>
         <h1>Site Bot Manager</h1>
-        <p className="muted">Manage the bot library for each configured domain without exposing GitHub credentials in the browser.</p>
+        <p className="muted">Enter the domain you want to manage. That domain becomes the only site visible and editable in this session.</p>
         <form onSubmit={submit}>
           <label>
-            Manager password
+            Domain password
             <input
               type="password"
               value={password}
-              autoComplete="current-password"
-              onChange={event => setPassword(event.target.value)}
-              placeholder="Enter manager password"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              onChange={event => setPassword(event.target.value.toLowerCase())}
+              placeholder="kicktrade.site"
               required
             />
           </label>
           {error && <div className="alert error">{error}</div>}
           <button className="primary-button" disabled={busy || !password} type="submit">
-            {busy ? 'Signing in…' : 'Sign in'}
+            {busy ? 'Opening domain…' : 'Open domain'}
           </button>
         </form>
       </section>
@@ -136,19 +138,22 @@ export default function App() {
   const loadDomains = useCallback(async () => {
     try {
       const payload = await api<{ domains: Domain[] }>('domains');
-      setDomains(payload.domains);
+      const domain = payload.domains[0];
+      setDomains(domain ? [domain] : []);
+      setSelectedSite(domain?.id || '');
       setAuthenticated(true);
       setError('');
-      if (!selectedSite && payload.domains[0]) setSelectedSite(payload.domains[0].id);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setAuthenticated(false);
+        setDomains([]);
+        setSelectedSite('');
         return;
       }
       setAuthenticated(false);
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [selectedSite]);
+  }, []);
 
   const loadBots = useCallback(async (siteId: string) => {
     if (!siteId) return;
@@ -265,7 +270,7 @@ export default function App() {
         }
         if (status.status === 'failed') throw new Error(status.message);
       }
-      throw new Error('Validation is still running. Refresh and publish again only after checking the open GitHub PR.');
+      throw new Error('Validation is still running. Refresh only after checking the open GitHub PR.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setAuthenticated(false);
       else setError(err instanceof Error ? err.message : String(err));
@@ -286,7 +291,7 @@ export default function App() {
   };
 
   if (authenticated === null) {
-    return <main className="loading-shell"><div className="spinner" />Checking manager session…</main>;
+    return <main className="loading-shell"><div className="spinner" />Checking domain session…</main>;
   }
 
   if (!authenticated) return <Login onSuccess={loadDomains} />;
@@ -296,42 +301,33 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-brand">
           <div className="brand-mark small">SM</div>
-          <div><strong>Site Bot Manager</strong><small>DukeNyamasege/nnn</small></div>
+          <div><strong>Site Bot Manager</strong><small>{selectedDomain?.display_domain || 'Domain access'}</small></div>
         </div>
-        <button className="ghost-button" type="button" onClick={logout}>Sign out</button>
+        <button className="ghost-button" type="button" onClick={logout}>Change domain</button>
       </header>
 
       <main className="workspace">
         <section className="hero">
           <p className="eyebrow">DOMAIN BOT CONTROL</p>
-          <h1>Publish the right bots to the right site.</h1>
-          <p>Select a managed domain, add or remove XML strategies, drag them into order, then publish. GitHub validation must pass before the target repository is merged.</p>
+          <h1>{selectedDomain ? `Manage ${selectedDomain.display_domain}` : 'Manage domain bots'}</h1>
+          <p>This session is locked to the domain used at login. Add or remove XML strategies, drag them into order, then publish.</p>
         </section>
 
         <section className="manager-card">
           <div className="section-head">
             <div>
               <span className="step">1</span>
-              <div><strong>Select domain</strong><small>Loaded live from the target repository</small></div>
+              <div><strong>Authorized domain</strong><small>Determined by the domain password used to enter</small></div>
             </div>
             {dirty && <span className="unsaved-pill">UNPUBLISHED CHANGES</span>}
           </div>
 
-          <select
-            className="domain-select"
-            value={selectedSite}
-            disabled={publishing}
-            onChange={event => {
-              if (dirty && !window.confirm('Discard unpublished changes and switch domain?')) return;
-              setSelectedSite(event.target.value);
-            }}
-          >
-            {domains.map(domain => <option key={domain.id} value={domain.id}>{domain.display_domain}</option>)}
-          </select>
-
           {selectedDomain && (
-            <div className="domain-meta">
-              <span>{selectedDomain.id}</span>
+            <div className="domain-meta domain-meta--locked">
+              <div>
+                <strong>{selectedDomain.display_domain}</strong>
+                <span>{selectedDomain.id}</span>
+              </div>
               <a href={selectedDomain.website_url} target="_blank" rel="noreferrer">Open site ↗</a>
             </div>
           )}

@@ -8,8 +8,7 @@ import {
   nowBranchSuffix,
   parseJsonBody,
   readRepoFile,
-  requireAuth,
-  requireSite,
+  requireSiteAccess,
   safeAssetPath,
   sha8,
   slugify,
@@ -54,7 +53,6 @@ const parseOldDomainManifest = content => {
 export const handler = async event => {
   try {
     if (event.httpMethod !== 'POST') throw new HttpError(405, 'Method not allowed.');
-    requireAuth(event);
 
     const body = parseJsonBody(event);
     const siteId = String(body.site_id || '');
@@ -62,7 +60,7 @@ export const handler = async event => {
     if (!items) throw new HttpError(400, 'items must be an array.');
     if (items.length > 100) throw new HttpError(400, 'A domain cannot publish more than 100 bots at once.');
 
-    const site = await requireSite(siteId);
+    const site = await requireSiteAccess(event, siteId);
     const domainManifestPath = `${DOMAIN_ROOT}/${site.id}.json`;
     const existingDomainFile = await readRepoFile(domainManifestPath, { optional: true });
     const oldDomainBots = parseOldDomainManifest(existingDomainFile?.content);
@@ -196,6 +194,7 @@ export const handler = async event => {
       pr: pr.number,
       head_sha: commit.sha,
       branch,
+      site_id: site.id,
       message: `Validation PR #${pr.number} created.`,
     });
   } catch (error) {
