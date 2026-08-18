@@ -1,0 +1,239 @@
+.private-login-card input[type='text']::placeholder {
+  color: transparent;
+}
+
+.onboarding-workspace {
+  max-width: 1180px;
+}
+
+.wizard-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.wizard-nav button {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: #111923;
+  color: #9aa9b8;
+  border-radius: 12px;
+  padding: 12px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.wizard-nav button span {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wizard-nav button.is-active {
+  background: #143f36;
+  color: #fff;
+  border-color: rgba(25, 203, 163, 0.5);
+}
+
+.wizard-card {
+  display: grid;
+  gap: 18px;
+}
+
+.wizard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.wizard-grid label,
+.scope-list label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  color: #b7c4cf;
+}
+
+.wizard-grid input,
+.wizard-grid select {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: #0c141d;
+  color: #f7fafc;
+  border-radius: 10px;
+  padding: 12px 13px;
+}
+
+.wizard-grid input:disabled {
+  opacity: 0.68;
+}
+
+.wizard-span-2 {
+  grid-column: 1 / -1;
+}
+
+.scope-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scope-list label {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.scope-list label span {
+  display: grid;
+  gap: 2px;
+}
+
+.scope-list small,
+.wizard-list-row small,
+.review-grid small {
+  color: #8293a3;
+}
+
+.wizard-list {
+  display: grid;
+  gap: 8px;
+}
+
+.wizard-list-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #0f1720;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.wizard-list-row > div:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.row-actions button {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: #d8e2ea;
+  background: #17222d;
+  border-radius: 8px;
+  min-width: 38px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.row-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.review-grid > div {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: #0e1720;
+  border-radius: 10px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.review-grid strong {
+  overflow-wrap: anywhere;
+}
+
+.dns-records {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  background: rgba(245, 158, 11, 0.07);
+  border-radius: 12px;
+  padding: 15px;
+}
+
+.dns-records h3,
+.dns-records p {
+  margin: 0;
+}
+
+.dns-records code {
+  display: block;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #091018;
+  border-radius: 8px;
+  padding: 10px;
+  color: #c8f7e9;
+}
+
+.alert.success {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+  color: #bdf7df;
+}
+
+.onboarding-finished {
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .wizard-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-nav button {
+    justify-content: flex-start;
+  }
+
+  .wizard-grid,
+  .scope-list,
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-span-2 {
+    grid-column: auto;
+  }
+
+  .wizard-list-row {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}

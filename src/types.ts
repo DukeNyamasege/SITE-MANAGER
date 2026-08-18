@@ -2,6 +2,11 @@ export type Domain = {
   id: string;
   display_domain: string;
   website_url: string;
+  redirect_uri?: string;
+  client_id?: string;
+  scopes?: string[];
+  environment?: 'production' | 'staging' | string;
+  legacy_app_id?: string;
 };
 
 export type BotMeta = {
@@ -62,12 +67,39 @@ export type SiteSettingsResponse = {
   colors: ThemeColors;
 };
 
+export type DomainsResponse = {
+  domains: Domain[];
+  onboarding?: boolean;
+};
+
+export type LoginResponse = {
+  ok: boolean;
+  mode: 'manage' | 'provision';
+  site: Domain;
+  message?: string;
+};
+
+export type OnboardingResponse = {
+  status: 'draft' | 'configured';
+  site: Domain;
+  catalog?: NavigationFeature[];
+  navigation?: string[];
+  colors?: ThemeColors;
+  recommended_scopes?: string[];
+  optional_scopes?: string[];
+  infrastructure?: {
+    netlify_automation: boolean;
+    dns_automation: boolean;
+  };
+};
+
 export type PublishResponse = {
-  status: 'pending' | 'no_changes';
+  status: 'pending' | 'no_changes' | 'already_configured';
   pr?: number;
   head_sha?: string;
   branch?: string;
   message?: string;
+  site?: Domain;
 };
 
 export type PublishStatusResponse = {
@@ -75,4 +107,27 @@ export type PublishStatusResponse = {
   message: string;
   merge_sha?: string;
   workflow_url?: string;
+};
+
+export type InfrastructureResponse = {
+  status: 'needs_configuration' | 'dns_required' | 'domain_connected';
+  message: string;
+  domain: string;
+  netlify?: {
+    site_id: string;
+    hostname: string;
+    aliases_added: string[];
+  };
+  dns?: {
+    configured?: boolean;
+    status?: string;
+    message?: string;
+    [key: string]: unknown;
+  };
+  dns_records?: {
+    apex: { type: string; host: string; value: string };
+    apex_fallback: { type: string; host: string; value: string };
+    www: { type: string; host: string; value: string };
+  };
+  ssl?: { status: string; message?: string };
 };

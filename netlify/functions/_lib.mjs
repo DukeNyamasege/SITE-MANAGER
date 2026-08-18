@@ -50,9 +50,36 @@ const sign = payload => crypto
   .update(`site-manager-domain-session:${payload}`)
   .digest('base64url');
 
-export const createSessionToken = siteId => {
+export const normalizeDomainPassword = value => {
+  let domain = String(value || '').trim().toLowerCase();
+  domain = domain.replace(/^https?:\/\//, '').split('/')[0].split('?')[0].split('#')[0];
+  domain = domain.replace(/^www\./, '').replace(/\.$/, '');
+  return domain;
+};
+
+export const validateDomainName = value => {
+  const domain = normalizeDomainPassword(value);
+  if (!domain || domain.length > 253 || !domain.includes('.')) return '';
+  const labels = domain.split('.');
+  if (labels.some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return '';
+  return domain;
+};
+
+export const domainToSiteId = value => {
+  const domain = validateDomainName(value);
+  if (!domain) return '';
+  return domain
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+};
+
+export const createSessionToken = input => {
+  const value = typeof input === 'string' ? { site_id: input, mode: 'manage' } : input || {};
   const payload = base64url(JSON.stringify({
-    site_id: String(siteId),
+    site_id: String(value.site_id || ''),
+    domain: normalizeDomainPassword(value.domain || ''),
+    mode: value.mode === 'provision' ? 'provision' : 'manage',
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
   }));
   return `${payload}.${sign(payload)}`;
@@ -69,30 +96,47 @@ const parseCookies = header => Object.fromEntries(
     })
 );
 
-export const getAuthenticatedSiteId = event => {
+export const getSession = event => {
   try {
     const token = parseCookies(event.headers?.cookie || event.headers?.Cookie)[SESSION_COOKIE];
-    if (!token) return '';
+    if (!token) return null;
     const [payload, signature] = token.split('.');
-    if (!payload || !signature) return '';
+    if (!payload || !signature) return null;
     const expected = sign(payload);
     const a = Buffer.from(signature);
     const b = Buffer.from(expected);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return '';
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
     const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (Number(decoded.exp) <= Math.floor(Date.now() / 1000)) return '';
-    return typeof decoded.site_id === 'string' ? decoded.site_id : '';
+    if (Number(decoded.exp) <= Math.floor(Date.now() / 1000)) return null;
+    if (typeof decoded.site_id !== 'string' || !decoded.site_id) return null;
+    return {
+      site_id: decoded.site_id,
+      domain: normalizeDomainPassword(decoded.domain || ''),
+      mode: decoded.mode === 'provision' ? 'provision' : 'manage',
+      exp: Number(decoded.exp),
+    };
   } catch {
-    return '';
+    return null;
   }
 };
 
-export const isAuthenticated = event => Boolean(getAuthenticatedSiteId(event));
+export const getAuthenticatedSiteId = event => getSession(event)?.site_id || '';
+export const isAuthenticated = event => Boolean(getSession(event));
 
-export const requireAuth = event => {
-  const siteId = getAuthenticatedSiteId(event);
-  if (!siteId) throw new HttpError(401, 'Domain session expired. Enter the domain again.');
-  return siteId;
+export const requireSession = event => {
+  const session = getSession(event);
+  if (!session) throw new HttpError(401, 'Domain session expired. Enter the domain again.');
+  return session;
+};
+
+export const requireAuth = event => requireSession(event).site_id;
+
+export const requireProvisioningSession = event => {
+  const session = requireSession(event);
+  if (session.mode !== 'provision' || !session.domain) {
+    throw new HttpError(403, 'This session is not a new-site provisioning session.');
+  }
+  return session;
 };
 
 export const sessionCookie = token => {
@@ -177,13 +221,6 @@ export async function getSiteCustomizationCatalog() {
   };
 }
 
-export const normalizeDomainPassword = value => {
-  let domain = String(value || '').trim().toLowerCase();
-  domain = domain.replace(/^https?:\/\//, '').split('/')[0].split('?')[0].split('#')[0];
-  domain = domain.replace(/^www\./, '').replace(/\.$/, '');
-  return domain;
-};
-
 export async function getSites() {
   const configFile = await readRepoFile('brand.config.json');
   let config;
@@ -194,6 +231,11 @@ export async function getSites() {
     id: String(site.id),
     display_domain: String(site.display_domain || site.hosts?.[0] || site.id),
     website_url: String(site.website_url || ''),
+    redirect_uri: String(site.redirect_uri || ''),
+    client_id: String(site.client_id || ''),
+    scopes: Array.isArray(site.scopes) ? site.scopes.map(String) : [],
+    environment: String(site.environment || 'production'),
+    legacy_app_id: typeof site.legacy_app_id === 'string' ? site.legacy_app_id : '',
   }));
 }
 
@@ -216,12 +258,17 @@ export async function requireSite(siteId) {
 }
 
 export async function requireSiteAccess(event, requestedSiteId = '') {
-  const authorizedSiteId = requireAuth(event);
-  const requested = String(requestedSiteId || authorizedSiteId);
-  if (requested !== authorizedSiteId) {
+  const session = requireSession(event);
+  if (session.mode !== 'manage') {
+    const existing = await getSiteByDomainPassword(session.domain);
+    if (!existing) throw new HttpError(409, 'Finish provisioning this domain before opening existing-site tools.');
+    session.site_id = existing.id;
+  }
+  const requested = String(requestedSiteId || session.site_id);
+  if (requested !== session.site_id) {
     throw new HttpError(403, 'This session can only manage its authenticated domain.');
   }
-  return requireSite(authorizedSiteId);
+  return requireSite(session.site_id);
 }
 
 export const parseJsonBody = event => {
