@@ -1,4 +1,4 @@
-import { HttpError, errorResponse, json, readRepoFile, requireAuth, requireSite } from './_lib.mjs';
+import { HttpError, errorResponse, json, readRepoFile, requireSiteAccess } from './_lib.mjs';
 
 const parseManifest = (content, label) => {
   let manifest;
@@ -15,9 +15,8 @@ const parseManifest = (content, label) => {
 export const handler = async event => {
   try {
     if (event.httpMethod !== 'GET') throw new HttpError(405, 'Method not allowed.');
-    requireAuth(event);
-    const siteId = String(event.queryStringParameters?.site_id || '');
-    const site = await requireSite(siteId);
+    const requestedSiteId = String(event.queryStringParameters?.site_id || '');
+    const site = await requireSiteAccess(event, requestedSiteId);
 
     const domainPath = `public/free-bots/domains/${site.id}.json`;
     const domainManifest = await readRepoFile(domainPath, { optional: true });

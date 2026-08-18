@@ -32,17 +32,29 @@ export const errorResponse = error => {
   return json(500, { message: error instanceof Error ? error.message : String(error) });
 };
 
-const base64url = input => Buffer.from(input).toString('base64url');
-const sessionSecret = () => {
-  const value = process.env.SESSION_SECRET;
-  if (!value || value.length < 24) throw new HttpError(500, 'SESSION_SECRET is missing or too short.');
-  return value;
+const repositoryParts = () => {
+  const [owner, repo, ...rest] = TARGET_REPO.split('/');
+  if (!owner || !repo || rest.length) throw new HttpError(500, 'TARGET_REPO must be in owner/repository format.');
+  return { owner, repo };
 };
 
-const sign = payload => crypto.createHmac('sha256', sessionSecret()).update(payload).digest('base64url');
+const githubToken = () => {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) throw new HttpError(500, 'GITHUB_TOKEN is not configured on the Site Manager server.');
+  return token;
+};
 
-export const createSessionToken = () => {
-  const payload = base64url(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS }));
+const base64url = input => Buffer.from(input).toString('base64url');
+const sign = payload => crypto
+  .createHmac('sha256', githubToken())
+  .update(`site-manager-domain-session:${payload}`)
+  .digest('base64url');
+
+export const createSessionToken = siteId => {
+  const payload = base64url(JSON.stringify({
+    site_id: String(siteId),
+    exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
+  }));
   return `${payload}.${sign(payload)}`;
 };
 
@@ -57,25 +69,30 @@ const parseCookies = header => Object.fromEntries(
     })
 );
 
-export const isAuthenticated = event => {
+export const getAuthenticatedSiteId = event => {
   try {
     const token = parseCookies(event.headers?.cookie || event.headers?.Cookie)[SESSION_COOKIE];
-    if (!token) return false;
+    if (!token) return '';
     const [payload, signature] = token.split('.');
-    if (!payload || !signature) return false;
+    if (!payload || !signature) return '';
     const expected = sign(payload);
     const a = Buffer.from(signature);
     const b = Buffer.from(expected);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return '';
     const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return Number(decoded.exp) > Math.floor(Date.now() / 1000);
+    if (Number(decoded.exp) <= Math.floor(Date.now() / 1000)) return '';
+    return typeof decoded.site_id === 'string' ? decoded.site_id : '';
   } catch {
-    return false;
+    return '';
   }
 };
 
+export const isAuthenticated = event => Boolean(getAuthenticatedSiteId(event));
+
 export const requireAuth = event => {
-  if (!isAuthenticated(event)) throw new HttpError(401, 'Manager session expired. Sign in again.');
+  const siteId = getAuthenticatedSiteId(event);
+  if (!siteId) throw new HttpError(401, 'Domain session expired. Enter the domain again.');
+  return siteId;
 };
 
 export const sessionCookie = token => {
@@ -86,18 +103,6 @@ export const sessionCookie = token => {
 export const clearSessionCookie = () => {
   const secure = process.env.CONTEXT === 'dev' ? '' : '; Secure';
   return `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict${secure}`;
-};
-
-const repositoryParts = () => {
-  const [owner, repo, ...rest] = TARGET_REPO.split('/');
-  if (!owner || !repo || rest.length) throw new HttpError(500, 'TARGET_REPO must be in owner/repository format.');
-  return { owner, repo };
-};
-
-const githubToken = () => {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new HttpError(500, 'GITHUB_TOKEN is not configured on the Site Manager server.');
-  return token;
 };
 
 export async function github(path, options = {}) {
@@ -145,6 +150,13 @@ export async function readRepoFile(path, { ref = TARGET_BRANCH, optional = false
   }
 }
 
+export const normalizeDomainPassword = value => {
+  let domain = String(value || '').trim().toLowerCase();
+  domain = domain.replace(/^https?:\/\//, '').split('/')[0].split('?')[0].split('#')[0];
+  domain = domain.replace(/^www\./, '').replace(/\.$/, '');
+  return domain;
+};
+
 export async function getSites() {
   const configFile = await readRepoFile('brand.config.json');
   let config;
@@ -158,11 +170,31 @@ export async function getSites() {
   }));
 }
 
+export async function getSiteByDomainPassword(password) {
+  const normalized = normalizeDomainPassword(password);
+  if (!normalized) return undefined;
+  const sites = await getSites();
+  return sites.find(site => {
+    const display = normalizeDomainPassword(site.display_domain);
+    const website = normalizeDomainPassword(site.website_url);
+    return normalized === display || normalized === website;
+  });
+}
+
 export async function requireSite(siteId) {
   const sites = await getSites();
   const site = sites.find(candidate => candidate.id === siteId);
   if (!site) throw new HttpError(400, `Unknown managed site: ${siteId}`);
   return site;
+}
+
+export async function requireSiteAccess(event, requestedSiteId = '') {
+  const authorizedSiteId = requireAuth(event);
+  const requested = String(requestedSiteId || authorizedSiteId);
+  if (requested !== authorizedSiteId) {
+    throw new HttpError(403, 'This session can only manage its authenticated domain.');
+  }
+  return requireSite(authorizedSiteId);
 }
 
 export const parseJsonBody = event => {
