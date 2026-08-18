@@ -32,7 +32,8 @@ export const handler = async event => {
       optional_scopes: ['account_manage', 'payment'],
       infrastructure: {
         netlify_automation: Boolean(process.env.NETLIFY_ACCESS_TOKEN && process.env.NETLIFY_SITE_ID),
-        dns_automation: Boolean(process.env.PROVISIONER_URL && process.env.PROVISIONER_SECRET),
+        dns_automation: false,
+        dns_mode: 'manual',
       },
     });
   } catch (error) {
