@@ -71,9 +71,37 @@ const namecheap = async (command, params = {}, method = 'GET') => {
     .map(match => `${match[1]}: ${xmlDecode(match[2].trim())}`)
     .filter(Boolean);
   if (apiStatus.toUpperCase() !== 'OK' || errors.length) {
-    throw new Error(errors.join('; ') || 'Namecheap returned an unsuccessful response.');
+    const error = new Error(errors.join('; ') || 'Namecheap returned an unsuccessful response.');
+    error.namecheapErrors = errors;
+    throw error;
   }
   return xml;
+};
+
+const verifyNamecheapOwnership = async body => {
+  const parts = domainParts(body.domain);
+  try {
+    const xml = await namecheap('namecheap.domains.getInfo', { DomainName: parts.domain });
+    const tag = /<DomainGetInfoResult\b([^>]*)>/i.exec(xml);
+    const attrs = tag ? parseAttrs(tag[1]) : {};
+    const returnedDomain = normalizeDomain(attrs.DomainName || parts.domain);
+    if (returnedDomain !== parts.domain) {
+      return { verified: false, provider: 'namecheap', domain: parts.domain, message: 'Namecheap did not return the requested domain.' };
+    }
+    return {
+      verified: true,
+      provider: 'namecheap',
+      domain: parts.domain,
+      message: 'Domain exists in the connected Namecheap account.',
+    };
+  } catch (error) {
+    return {
+      verified: false,
+      provider: 'namecheap',
+      domain: parts.domain,
+      message: error instanceof Error ? error.message : 'Namecheap could not verify this domain.',
+    };
+  }
 };
 
 const getHosts = async ({ sld, tld }) => {
@@ -102,6 +130,13 @@ const setHosts = async ({ sld, tld }, hosts) => {
 
 const configureNamecheap = async body => {
   const parts = domainParts(body.domain);
+  const ownership = await verifyNamecheapOwnership(body);
+  if (!ownership.verified) {
+    const error = new Error(ownership.message || 'Domain ownership could not be verified in the connected Namecheap account.');
+    error.status = 403;
+    throw error;
+  }
+
   const netlifyHostname = normalizeDomain(body.netlify_hostname);
   if (!netlifyHostname.endsWith('.netlify.app')) throw new Error('A valid Netlify hostname is required.');
 
@@ -154,11 +189,18 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
       return send(res, 200, { ok: true, service: 'site-manager-provisioner' });
     }
-    if (req.method !== 'POST' || req.url !== '/provision-namecheap') return send(res, 404, { message: 'Not found.' });
+    if (req.method !== 'POST' || !['/verify-namecheap', '/provision-namecheap'].includes(req.url || '')) {
+      return send(res, 404, { message: 'Not found.' });
+    }
     if (!SECRET) return send(res, 503, { message: 'PROVISIONER_SECRET is not configured.' });
     if (req.headers.authorization !== `Bearer ${SECRET}`) return send(res, 401, { message: 'Unauthorized.' });
 
     const body = await readJson(req);
+    if (req.url === '/verify-namecheap') {
+      const result = await verifyNamecheapOwnership(body);
+      return send(res, result.verified ? 200 : 404, result);
+    }
+
     const result = await configureNamecheap(body);
     return send(res, 200, result);
   } catch (error) {
