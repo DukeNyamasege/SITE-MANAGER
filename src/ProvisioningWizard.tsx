@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api, delay } from './api';
 import type {
   Domain,
+  DomainVerificationResponse,
   InfrastructureResponse,
   ManagerItem,
   NavigationFeature,
@@ -51,6 +52,8 @@ export default function ProvisioningWizard({
   const [colors, setColors] = useState<ThemeColors | null>(null);
   const [items, setItems] = useState<ManagerItem[]>([]);
   const [featureToAdd, setFeatureToAdd] = useState('');
+  const [verification, setVerification] = useState<DomainVerificationResponse | null>(null);
+  const [checkingVerification, setCheckingVerification] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -67,6 +70,9 @@ export default function ProvisioningWizard({
         setNavigation(payload.navigation || []);
         setColors(payload.colors || null);
         setScopes(payload.recommended_scopes || ['trade', 'application_read']);
+        void api<DomainVerificationResponse>('domain-verification')
+          .then(result => alive && setVerification(result))
+          .catch(err => alive && setError(err instanceof Error ? err.message : String(err)));
       })
       .catch(err => alive && setError(err instanceof Error ? err.message : String(err)));
     return () => { alive = false; };
@@ -82,6 +88,23 @@ export default function ProvisioningWizard({
   const toggleScope = (scope: string) => {
     if (scope === 'trade') return;
     setScopes(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]);
+  };
+
+  const checkVerification = async () => {
+    if (checkingVerification) return verification;
+    setCheckingVerification(true);
+    setError('');
+    try {
+      const result = await api<DomainVerificationResponse>('domain-verification', { method: 'POST' });
+      setVerification(result);
+      if (!result.verified) setError(result.message || 'Domain ownership is not verified yet.');
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return null;
+    } finally {
+      setCheckingVerification(false);
+    }
   };
 
   const addFiles = async (files: FileList | File[]) => {
@@ -133,6 +156,15 @@ export default function ProvisioningWizard({
       setStep(1);
       return;
     }
+
+    let ownership = verification;
+    if (!ownership?.verified) ownership = await checkVerification();
+    if (!ownership?.verified) {
+      setError('Verify that you control this domain before deploying it.');
+      setStep(4);
+      return;
+    }
+
     setBusy(true);
     setError('');
     setStatus('Creating the new-site validation PR…');
@@ -196,7 +228,7 @@ export default function ProvisioningWizard({
         <section className="hero">
           <p className="eyebrow">SELF-SERVICE SITE PROVISIONING</p>
           <h1>Build {site.display_domain}</h1>
-          <p>Complete the Deriv settings, choose the navigation and colors, add initial bots, then deploy through GitHub validation and Netlify.</p>
+          <p>Complete the Deriv settings, choose the navigation and colors, add initial bots, verify domain ownership, then deploy through GitHub validation and Netlify.</p>
         </section>
 
         <nav className="wizard-nav" aria-label="Setup steps">
@@ -258,7 +290,7 @@ export default function ProvisioningWizard({
                 </label>
               ))}
             </div>
-            <div className="wizard-actions"><button className="ghost-button" onClick={() => setStep(1)}>Back</button><button className="primary-button" onClick={() => setStep(3)}>Continue</button></div>
+            <div className="wizard-actions"><button className="ghost-button" type="button" onClick={() => setStep(1)}>Back</button><button className="primary-button" type="button" onClick={() => setStep(3)}>Continue</button></div>
           </section>
         )}
 
@@ -270,12 +302,12 @@ export default function ProvisioningWizard({
               {items.map((item, index) => (
                 <article className="wizard-list-row" key={item.kind === 'upload' ? item.temp_id : item.bot.id || item.bot.file}>
                   <span className="bot-order">{index + 1}</span><div><strong>{itemName(item)}</strong><small>{item.kind === 'upload' ? item.file_name : item.bot.file}</small></div>
-                  <div className="row-actions"><button disabled={index === 0} onClick={() => setItems(current => move(current, index, index - 1))}>↑</button><button disabled={index === items.length - 1} onClick={() => setItems(current => move(current, index, index + 1))}>↓</button><button onClick={() => setItems(current => current.filter((_, position) => position !== index))}>Delete</button></div>
+                  <div className="row-actions"><button type="button" disabled={index === 0} onClick={() => setItems(current => move(current, index, index - 1))}>↑</button><button type="button" disabled={index === items.length - 1} onClick={() => setItems(current => move(current, index, index + 1))}>↓</button><button type="button" onClick={() => setItems(current => current.filter((_, position) => position !== index))}>Delete</button></div>
                 </article>
               ))}
               {!items.length && <div className="empty-state">No initial bots selected. The new site will start with an empty domain bot library.</div>}
             </div>
-            <div className="wizard-actions"><button className="ghost-button" onClick={() => setStep(2)}>Back</button><button className="primary-button" onClick={() => setStep(4)}>Review</button></div>
+            <div className="wizard-actions"><button className="ghost-button" type="button" onClick={() => setStep(2)}>Back</button><button className="primary-button" type="button" onClick={() => setStep(4)}>Review</button></div>
           </section>
         )}
 
@@ -286,7 +318,31 @@ export default function ProvisioningWizard({
               <div><small>Domain</small><strong>{site.display_domain}</strong></div><div><small>Site ID</small><strong>{site.id}</strong></div><div><small>Deriv client</small><strong>{clientId || 'Not entered'}</strong></div><div><small>Redirect</small><strong>{site.redirect_uri}</strong></div><div><small>OAuth scopes</small><strong>{scopes.join(', ')}</strong></div><div><small>Navigation</small><strong>{navigation.length} items</strong></div><div><small>Initial bots</small><strong>{items.length}</strong></div><div><small>Netlify alias automation</small><strong>{boot.infrastructure?.netlify_automation ? 'Ready' : 'Needs environment variables'}</strong></div>
             </div>
             <div className="alert info">The Deriv OAuth application itself must already be registered with the exact HTTPS redirect URI shown above. The manager stores the client ID and site configuration; it does not create the Deriv application.</div>
-            <div className="wizard-actions"><button className="ghost-button" onClick={() => setStep(3)}>Back</button><button className="primary-button" disabled={!clientId.trim() || busy} onClick={() => void provision()}>{busy ? 'Deploying…' : 'Deploy website'}</button></div>
+
+            <div className={`ownership-card ${verification?.verified ? 'is-verified' : ''}`}>
+              <div>
+                <strong>Domain ownership</strong>
+                <small>{verification?.verified ? verification.message || 'Verified.' : 'The domain must be verified before SITE-MANAGER can add it to the production registry.'}</small>
+              </div>
+              {verification?.verified ? (
+                <span className="ownership-status">VERIFIED</span>
+              ) : (
+                <>
+                  {verification?.record && (
+                    <div className="ownership-record">
+                      <p>If this domain is not in the connected Namecheap account, add this TXT record at its current DNS provider:</p>
+                      <code>{verification.record.host} TXT → {verification.record.value}</code>
+                      <small>Full record: {verification.record.name}</small>
+                    </div>
+                  )}
+                  <button className="secondary-button" type="button" disabled={checkingVerification} onClick={() => void checkVerification()}>
+                    {checkingVerification ? 'Checking ownership…' : 'Check domain ownership'}
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="wizard-actions"><button className="ghost-button" type="button" onClick={() => setStep(3)}>Back</button><button className="primary-button" type="button" disabled={!clientId.trim() || busy || !verification?.verified} onClick={() => void provision()}>{busy ? 'Deploying…' : verification?.verified ? 'Deploy website' : 'Verify domain first'}</button></div>
           </section>
         )}
 

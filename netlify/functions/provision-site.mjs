@@ -15,6 +15,7 @@ import {
   sha8,
   slugify,
 } from './_lib.mjs';
+import { checkDomainOwnership } from './_domain-verification.mjs';
 
 const MAX_UPLOAD_BYTES = 1_500_000;
 const MAX_BOTS = 100;
@@ -123,6 +124,15 @@ export const handler = async event => {
       return json(200, { status: 'already_configured', site: existing, message: 'This domain is already configured.' });
     }
 
+    const ownership = await checkDomainOwnership(event);
+    if (!ownership.verified) {
+      throw new HttpError(403, 'Verify that you control this domain before provisioning it.', {
+        method: ownership.method,
+        record: ownership.record,
+        message: ownership.message,
+      });
+    }
+
     const clientId = String(body.client_id || '').trim();
     if (!clientId || clientId.length > 160) throw new HttpError(400, 'Enter the Deriv OAuth client/app ID from developers.deriv.com.');
     const environment = body.environment === 'staging' ? 'staging' : 'production';
@@ -203,6 +213,7 @@ export const handler = async event => {
       `Site ID: ${session.site_id}`,
       `Deriv client ID: ${clientId}`,
       `OAuth scopes: ${scopes.join(', ')}`,
+      `Ownership: ${ownership.method}`,
       `Navigation items: ${navigation.length}`,
       `Bots: ${bots.length}`,
     ].join('\n');
@@ -232,6 +243,7 @@ export const handler = async event => {
           `Site ID: ${session.site_id}`,
           `Redirect URI: https://${domain}/callback`,
           `OAuth scopes: ${scopes.join(', ')}`,
+          `Domain ownership: ${ownership.method}`,
           `Visible navigation items: ${navigation.length}`,
           `Initial bots: ${bots.length}`,
           '',
