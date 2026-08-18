@@ -32,33 +32,17 @@ const netlifyRequest = async (path, options = {}) => {
   return payload;
 };
 
-const callDnsProvisioner = async payload => {
-  const url = String(process.env.PROVISIONER_URL || '').replace(/\/$/, '');
-  const secret = process.env.PROVISIONER_SECRET;
-  if (!url || !secret) return { configured: false, status: 'manual' };
+const dnsRecords = hostname => ({
+  apex: { type: 'ALIAS', host: '@', value: 'apex-loadbalancer.netlify.com' },
+  apex_fallback: { type: 'A', host: '@', value: '75.2.60.5' },
+  www: { type: 'CNAME', host: 'www', value: hostname },
+});
 
-  const response = await fetch(`${url}/provision-namecheap`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  const text = await response.text();
-  let body = null;
-  if (text) {
-    try { body = JSON.parse(text); } catch { body = { message: text }; }
-  }
-  if (!response.ok) {
-    return {
-      configured: true,
-      status: 'failed',
-      message: body?.message || `DNS provisioner failed (${response.status}).`,
-    };
-  }
-  return { configured: true, status: 'configured', ...body };
+const certificateCovers = (certificate, domain) => {
+  const domains = Array.isArray(certificate?.domains)
+    ? certificate.domains.map(normalizeHost).filter(Boolean)
+    : [];
+  return domains.includes(domain) && domains.includes(`www.${domain}`);
 };
 
 export const handler = async event => {
@@ -70,15 +54,13 @@ export const handler = async event => {
 
     const netlifySiteId = process.env.NETLIFY_SITE_ID;
     if (!process.env.NETLIFY_ACCESS_TOKEN || !netlifySiteId) {
+      const hostname = normalizeHost(process.env.NETLIFY_SITE_HOSTNAME || '');
       return json(200, {
         status: 'needs_configuration',
-        message: 'GitHub provisioning is complete. Configure NETLIFY_ACCESS_TOKEN and NETLIFY_SITE_ID to automate domain aliases.',
+        message: 'The source site is configured, but Netlify API access is not ready. Add NETLIFY_ACCESS_TOKEN and NETLIFY_SITE_ID to SITE-MANAGER.',
         domain,
-        dns: {
-          apex: { type: 'ALIAS', host: '@', value: 'apex-loadbalancer.netlify.com' },
-          apex_fallback: { type: 'A', host: '@', value: '75.2.60.5' },
-          www: { type: 'CNAME', host: 'www', value: process.env.NETLIFY_SITE_HOSTNAME || '' },
-        },
+        dns: { configured: false, status: 'manual', message: 'DNS is intentionally manual.' },
+        dns_records: dnsRecords(hostname),
       });
     }
 
@@ -88,48 +70,79 @@ export const handler = async event => {
       throw new HttpError(500, 'Could not determine the target .netlify.app hostname. Set NETLIFY_SITE_HOSTNAME.');
     }
 
-    const existingAliases = Array.isArray(currentSite?.domain_aliases) ? currentSite.domain_aliases.map(normalizeHost).filter(Boolean) : [];
+    const existingAliases = Array.isArray(currentSite?.domain_aliases)
+      ? currentSite.domain_aliases.map(normalizeHost).filter(Boolean)
+      : [];
     const aliases = Array.from(new Set([...existingAliases, domain, `www.${domain}`]));
+
     await netlifyRequest(`sites/${encodeURIComponent(netlifySiteId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain_aliases: aliases }),
     });
 
-    const dns = await callDnsProvisioner({
-      domain,
-      netlify_hostname: defaultHostname,
-      apex_alias: 'apex-loadbalancer.netlify.com',
-      apex_fallback_ip: '75.2.60.5',
-    });
+    let certificate = null;
+    try {
+      certificate = await netlifyRequest(`sites/${encodeURIComponent(netlifySiteId)}/ssl`);
+    } catch (error) {
+      if (!(error instanceof HttpError) || ![404, 422].includes(error.status)) throw error;
+    }
+
+    if (certificateCovers(certificate, domain)) {
+      return json(200, {
+        status: 'domain_connected',
+        message: 'Netlify recognizes the domain aliases and the current TLS certificate covers the domain.',
+        domain,
+        netlify: {
+          site_id: netlifySiteId,
+          hostname: defaultHostname,
+          aliases_added: [domain, `www.${domain}`],
+        },
+        dns: { configured: false, status: 'manual', message: 'DNS remains managed manually at your DNS provider.' },
+        dns_records: dnsRecords(defaultHostname),
+        ssl: { status: String(certificate?.state || 'ready') },
+      });
+    }
 
     let ssl = { status: 'waiting_for_dns' };
-    if (dns.status === 'configured') {
-      try {
-        await netlifyRequest(`sites/${encodeURIComponent(netlifySiteId)}/ssl`, { method: 'POST' });
-        ssl = { status: 'requested' };
-      } catch (error) {
-        ssl = { status: 'pending', message: error instanceof Error ? error.message : String(error) };
-      }
+    try {
+      const provisioned = await netlifyRequest(`sites/${encodeURIComponent(netlifySiteId)}/ssl`, { method: 'POST' });
+      ssl = { status: String(provisioned?.state || 'requested') };
+      return json(200, {
+        status: 'domain_connected',
+        message: 'Netlify accepted the domain aliases and TLS provisioning request. Keep the manual DNS records in place while the certificate becomes active.',
+        domain,
+        netlify: {
+          site_id: netlifySiteId,
+          hostname: defaultHostname,
+          aliases_added: [domain, `www.${domain}`],
+        },
+        dns: { configured: false, status: 'manual', message: 'DNS remains managed manually at your DNS provider.' },
+        dns_records: dnsRecords(defaultHostname),
+        ssl,
+      });
+    } catch (error) {
+      ssl = {
+        status: 'waiting_for_dns',
+        message: error instanceof Error ? error.message : String(error),
+      };
     }
 
     return json(200, {
-      status: dns.status === 'configured' ? 'domain_connected' : 'dns_required',
-      message: dns.status === 'configured'
-        ? 'Netlify aliases and DNS were configured. SSL provisioning has been requested.'
-        : 'Netlify aliases were added. Complete the DNS records shown below, or connect the fixed-IP DNS provisioner.',
+      status: 'dns_required',
+      message: 'Netlify aliases are ready. Add the DNS records below manually, wait for propagation, then press Check DNS & SSL again.',
       domain,
       netlify: {
         site_id: netlifySiteId,
         hostname: defaultHostname,
         aliases_added: [domain, `www.${domain}`],
       },
-      dns,
-      dns_records: {
-        apex: { type: 'ALIAS', host: '@', value: 'apex-loadbalancer.netlify.com' },
-        apex_fallback: { type: 'A', host: '@', value: '75.2.60.5' },
-        www: { type: 'CNAME', host: 'www', value: defaultHostname },
+      dns: {
+        configured: false,
+        status: 'manual',
+        message: 'SITE-MANAGER will not change registrar DNS records. Configure them manually.',
       },
+      dns_records: dnsRecords(defaultHostname),
       ssl,
     });
   } catch (error) {
