@@ -40,7 +40,7 @@ const cleanExistingBot = (input, priority) => {
   return result;
 };
 
-const parseOldDomainManifest = content => {
+const parseBotManifest = content => {
   if (!content) return [];
   try {
     const parsed = JSON.parse(content);
@@ -49,6 +49,9 @@ const parseOldDomainManifest = content => {
     return [];
   }
 };
+
+const botKey = bot => String(bot?.id || bot?.asset || bot?.file || '');
+const botName = bot => String(bot?.name || bot?.title || bot?.file || bot?.id || 'Unknown bot');
 
 export const handler = async event => {
   try {
@@ -63,7 +66,13 @@ export const handler = async event => {
     const site = await requireSiteAccess(event, siteId);
     const domainManifestPath = `${DOMAIN_ROOT}/${site.id}.json`;
     const existingDomainFile = await readRepoFile(domainManifestPath, { optional: true });
-    const oldDomainBots = parseOldDomainManifest(existingDomainFile?.content);
+    const oldDomainBots = parseBotManifest(existingDomainFile?.content);
+    let oldVisibleBots = oldDomainBots;
+    if (!existingDomainFile) {
+      const shared = await readRepoFile(`${LIBRARY_ROOT}/bots.json`);
+      oldVisibleBots = parseBotManifest(shared.content);
+    }
+
     const newBots = [];
     const newAssets = [];
     const usedIds = new Set();
@@ -128,6 +137,14 @@ export const handler = async event => {
       return json(200, { status: 'no_changes', message: 'This domain is already published with the same bot list and order.' });
     }
 
+    const oldKeys = new Set(oldVisibleBots.map(botKey).filter(Boolean));
+    const newKeys = new Set(newBots.map(botKey).filter(Boolean));
+    const addedNames = newBots.filter(bot => !oldKeys.has(botKey(bot))).map(botName);
+    const removedNames = oldVisibleBots.filter(bot => !newKeys.has(botKey(bot))).map(botName);
+    const oldOrder = oldVisibleBots.map(botKey).filter(Boolean).join('|');
+    const newOrder = newBots.map(botKey).filter(Boolean).join('|');
+    const orderChanged = oldOrder !== newOrder;
+
     const mainRef = await github(`git/ref/heads/${encodeURIComponent(TARGET_BRANCH)}`);
     const mainSha = mainRef?.object?.sha;
     if (!mainSha) throw new HttpError(500, `Could not resolve ${TARGET_BRANCH}.`);
@@ -153,11 +170,19 @@ export const handler = async event => {
       body: JSON.stringify({ base_tree: baseTree, tree }),
     });
 
+    const changeLines = [
+      addedNames.length ? `Added: ${addedNames.join(', ')}` : 'Added: none',
+      removedNames.length ? `Removed: ${removedNames.join(', ')}` : 'Removed: none',
+      `Order changed: ${orderChanged ? 'yes' : 'no'}`,
+      `Total bots: ${newBots.length}`,
+    ];
+    const commitMessage = [`Update bots on ${site.display_domain}`, '', ...changeLines].join('\n');
+
     const commit = await github('git/commits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: `Update bots for ${site.display_domain}`,
+        message: commitMessage,
         tree: newTree.sha,
         parents: [mainSha],
       }),
@@ -174,13 +199,13 @@ export const handler = async event => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: `Update bots for ${site.display_domain}`,
+        title: `Update bots on ${site.display_domain}`,
         head: branch,
         base: TARGET_BRANCH,
         body: [
           `Automated bot-library publish for **${site.display_domain}**.`,
           '',
-          `Bots: ${newBots.length}`,
+          ...changeLines,
           `Uploaded assets: ${newAssets.length}`,
           `Removed domain assets: ${deletePaths.length}`,
           '',

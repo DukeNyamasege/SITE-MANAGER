@@ -150,6 +150,33 @@ export async function readRepoFile(path, { ref = TARGET_BRANCH, optional = false
   }
 }
 
+export async function getSiteCustomizationCatalog() {
+  const file = await readRepoFile('public/site-config/catalog.json');
+  let payload;
+  try { payload = JSON.parse(file.content); }
+  catch { throw new HttpError(500, 'Target site customization catalog is invalid JSON.'); }
+
+  const navigationCatalog = Array.isArray(payload?.navigation_catalog) ? payload.navigation_catalog : [];
+  const defaultNavigation = Array.isArray(payload?.defaults?.navigation) ? payload.defaults.navigation.map(String) : [];
+  const defaultColors = payload?.defaults?.colors;
+  if (!navigationCatalog.length || !defaultNavigation.length || !defaultColors || typeof defaultColors !== 'object') {
+    throw new HttpError(500, 'Target site customization catalog is incomplete.');
+  }
+
+  return {
+    version: Number(payload.version || 1),
+    navigation_catalog: navigationCatalog.map(item => ({
+      id: String(item.id),
+      label: String(item.label || item.id),
+      required: item.required === true,
+    })),
+    defaults: {
+      navigation: defaultNavigation,
+      colors: { ...defaultColors },
+    },
+  };
+}
+
 export const normalizeDomainPassword = value => {
   let domain = String(value || '').trim().toLowerCase();
   domain = domain.replace(/^https?:\/\//, '').split('/')[0].split('?')[0].split('#')[0];
