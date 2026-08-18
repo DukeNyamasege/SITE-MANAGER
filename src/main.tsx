@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './AppV2';
 import './styles.css';
 import './customization.css';
+import './netlify-only.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
