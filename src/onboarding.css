@@ -175,6 +175,61 @@
   overflow-wrap: anywhere;
 }
 
+.ownership-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.07);
+  border-radius: 12px;
+  padding: 15px;
+}
+
+.ownership-card > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.ownership-card small {
+  color: #9babb9;
+}
+
+.ownership-card.is-verified {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.ownership-status {
+  width: max-content;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  background: rgba(16, 185, 129, 0.14);
+  color: #bdf7df;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.ownership-record {
+  display: grid;
+  gap: 7px;
+}
+
+.ownership-record p {
+  margin: 0;
+  color: #c7d1da;
+}
+
+.ownership-record code {
+  display: block;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #091018;
+  border-radius: 8px;
+  padding: 10px;
+  color: #ffe7a8;
+}
+
 .dns-records {
   display: grid;
   gap: 8px;
