@@ -1,5 +1,32 @@
 import { HttpError, TARGET_BRANCH, errorResponse, github, json, requireAuth } from './_lib.mjs';
 
+const workflowFailureSummary = async workflow => {
+  try {
+    const payload = await github(`actions/runs/${workflow.id}/jobs?per_page=30`);
+    const jobs = Array.isArray(payload?.jobs) ? payload.jobs : [];
+    const failures = [];
+
+    for (const job of jobs) {
+      if (job?.conclusion !== 'failure') continue;
+      const failedSteps = Array.isArray(job.steps)
+        ? job.steps.filter(step => step?.conclusion === 'failure')
+        : [];
+      if (!failedSteps.length) {
+        failures.push(String(job.name || 'Validation job'));
+        continue;
+      }
+      for (const step of failedSteps) {
+        failures.push(`${job.name || 'Validation job'} → ${step.name || 'failed step'}`);
+      }
+    }
+
+    return [...new Set(failures)].slice(0, 6);
+  } catch (error) {
+    console.warn('Could not load failed validation steps:', error instanceof Error ? error.message : error);
+    return [];
+  }
+};
+
 export const handler = async event => {
   try {
     if (event.httpMethod !== 'GET') throw new HttpError(405, 'Method not allowed.');
@@ -55,9 +82,14 @@ export const handler = async event => {
     }
 
     if (workflow.conclusion !== 'success') {
+      const failedSteps = await workflowFailureSummary(workflow);
+      const detail = failedSteps.length
+        ? ` Failed step${failedSteps.length === 1 ? '' : 's'}: ${failedSteps.join('; ')}.`
+        : '';
       return json(200, {
         status: 'failed',
-        message: `PR #${prNumber} was not merged because validation finished with: ${workflow.conclusion}.`,
+        message: `PR #${prNumber} was not merged because validation finished with ${workflow.conclusion}.${detail}`,
+        failed_steps: failedSteps,
         workflow_url: workflow.html_url,
       });
     }
