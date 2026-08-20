@@ -143,6 +143,18 @@ jobs:
       - name: Rehearse immutable cutover planning and invalidation
         run: node scripts/rehearse-cutover-orchestration.mjs | tee ${{ runner.temp }}/cutover-orchestration-node-${{ matrix.node-version }}.json
 
+      - name: Rehearse canary activation and automatic rollback
+        env:
+          CANARY_EXECUTION_MODE: simulate
+          CANARY_SIMULATION_STATE_DIR: ${{ runner.temp }}/canary-simulation-node-${{ matrix.node-version }}
+          CANARY_MIN_OBSERVATION_SECONDS: 0
+          CANARY_REHEARSAL_REPORT_PATH: ${{ runner.temp }}/canary-rehearsal-node-${{ matrix.node-version }}.json
+        run: |
+          NNN_SHA="$(git -C .staging/nnn rev-parse HEAD)"
+          NNN_CANARY_DIST_DIR="$PWD/.staging/nnn/dist" \
+          NNN_CANARY_RELEASE="$NNN_SHA" \
+          node scripts/rehearse-canary-cutover.mjs
+
       - name: Validate staging rehearsal safety contract
         run: node scripts/validate-staging-rehearsal.mjs
 
@@ -155,14 +167,16 @@ jobs:
           NNN_REHEARSAL_RELEASE="$NNN_SHA" \
           node scripts/rehearse-staging.mjs
 
-      - name: Upload migration, parity, cutover and staging reports
+      - name: Upload migration, parity, cutover, canary and staging reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step12-rehearsal-node-${{ matrix.node-version }}
+          name: step13-rehearsal-node-${{ matrix.node-version }}
           path: |
             ${{ runner.temp }}/legacy-nnn-audit-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/dual-run-parity-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/cutover-orchestration-node-${{ matrix.node-version }}.json
+            ${{ runner.temp }}/canary-rehearsal-node-${{ matrix.node-version }}.json
+            ${{ runner.temp }}/canary-simulation-node-${{ matrix.node-version }}
             ${{ runner.temp }}/site-manager-rehearsals
           if-no-files-found: ignore
