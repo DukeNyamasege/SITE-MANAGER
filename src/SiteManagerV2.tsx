@@ -1,20 +1,21 @@
 import { useState } from 'react';
 import AppV2 from './AppV2';
 import { AuthProvider, AuthScreen, useAuth } from './auth';
+import { CreateWebsiteView, MyWebsitesView } from './websites';
 import './styles.css';
 import './customization.css';
 import './netlify-only.css';
 import './v2.css';
 
-type WorkspaceView = 'overview' | 'current-manager' | 'account';
+type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'current-manager' | 'account';
 
 const capabilities = [
-  'Existing website/domain resolution',
-  'Navigation and theme customization',
-  'XML bot upload, ordering and removal',
-  'New-site provisioning wizard',
-  'GitHub PR validation and publishing',
-  'Per-site configuration consumed by DukeNyamasege/nnn',
+  'Verified customer accounts and VPS sessions',
+  'One customer can own multiple websites',
+  'Stable per-website identity and nnn template assignment',
+  'Per-website USD 10/month billing record',
+  'Existing domain manager preserved for migration',
+  'GitHub validation and publishing preserved',
 ];
 
 export default function SiteManagerV2() {
@@ -47,6 +48,11 @@ function AuthenticatedWorkspace() {
     );
   }
 
+  const pageTitle = view === 'account' ? 'Your account'
+    : view === 'my-websites' ? 'My Websites'
+      : view === 'create-website' ? 'Create Website'
+        : 'Site Manager V2';
+
   return (
     <div className="v2-shell">
       <aside className="v2-sidebar">
@@ -60,8 +66,8 @@ function AuthenticatedWorkspace() {
 
         <nav className="v2-nav" aria-label="Site Manager V2 development navigation">
           <button className={view === 'overview' ? 'is-active' : ''} type="button" onClick={() => setView('overview')}>Overview</button>
-          <button type="button" disabled>My Websites</button>
-          <button type="button" disabled>Create Website</button>
+          <button className={view === 'my-websites' ? 'is-active' : ''} type="button" onClick={() => setView('my-websites')}>My Websites</button>
+          <button className={view === 'create-website' ? 'is-active' : ''} type="button" onClick={() => setView('create-website')}>Create Website</button>
           <button type="button" disabled>Templates</button>
           <button type="button" disabled>Domains</button>
           <button type="button" disabled>Deployments</button>
@@ -78,7 +84,7 @@ function AuthenticatedWorkspace() {
         <header className="v2-topbar">
           <div>
             <p>DEVELOPMENT WORKSPACE</p>
-            <h1>{view === 'account' ? 'Your account' : 'Site Manager V2'}</h1>
+            <h1>{pageTitle}</h1>
           </div>
           <div className="v2-account-chip">
             <div>
@@ -89,11 +95,10 @@ function AuthenticatedWorkspace() {
           </div>
         </header>
 
-        {view === 'account' ? (
-          <AccountView />
-        ) : (
-          <OverviewView onOpenCurrentManager={() => setView('current-manager')} />
-        )}
+        {view === 'account' && <AccountView />}
+        {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} />}
+        {view === 'my-websites' && <MyWebsitesView onCreateWebsite={() => setView('create-website')} />}
+        {view === 'create-website' && <CreateWebsiteView onCreated={() => setView('my-websites')} onCancel={() => setView('my-websites')} />}
       </main>
     </div>
   );
@@ -107,11 +112,11 @@ function AccountView() {
     <>
       <section className="v2-hero-card">
         <div>
-          <p className="v2-kicker">ACCOUNT FOUNDATION ACTIVE</p>
-          <h2>Your identity now sits above every website you will create.</h2>
+          <p className="v2-kicker">OWNERSHIP FOUNDATION ACTIVE</p>
+          <h2>Your account is now the permanent owner boundary for websites.</h2>
           <p>
-            Domain names are no longer the long-term login model. This verified account will become the owner of your sites,
-            domains, deployments and individual subscriptions as the next milestones are connected.
+            Website APIs use the authenticated VPS session to determine ownership. The browser cannot choose another customer ID,
+            and every newly created website receives its own database identity and billing record.
           </p>
         </div>
       </section>
@@ -119,62 +124,65 @@ function AccountView() {
       <section className="v2-grid">
         <article className="v2-card">
           <div className="v2-card-head"><div><span className="v2-card-label">EMAIL</span><h3>{user.email}</h3></div><span className="v2-state good">VERIFIED</span></div>
-          <p>Email verification is required before Site Manager creates an authenticated session.</p>
+          <p>Email verification remains required before Site Manager issues an authenticated customer session.</p>
         </article>
         <article className="v2-card">
-          <div className="v2-card-head"><div><span className="v2-card-label">ACCOUNT ID</span><h3>{user.id.slice(0, 8)}…</h3></div><span className="v2-state good">ACTIVE</span></div>
-          <p>Your permanent user ID will be used as the ownership boundary for websites and billing records.</p>
+          <div className="v2-card-head"><div><span className="v2-card-label">OWNERSHIP ID</span><h3>{user.id.slice(0, 8)}…</h3></div><span className="v2-state good">ACTIVE</span></div>
+          <p>All website reads and writes are filtered by this authenticated user ID on the server.</p>
         </article>
         <article className="v2-card">
-          <div className="v2-card-head"><div><span className="v2-card-label">SECURITY</span><h3>Server-side session</h3></div><span className="v2-state good">SECURE</span></div>
-          <p>The browser receives an opaque HttpOnly cookie. Password hashes and live session records remain on the VPS database.</p>
+          <div className="v2-card-head"><div><span className="v2-card-label">WEBSITE PLAN</span><h3>USD 10 / month</h3></div><span className="v2-state good">PER SITE</span></div>
+          <p>Each website owns a separate subscription record. Billing activation and the free-month lifecycle come later.</p>
         </article>
       </section>
 
       <section className="v2-next-step">
         <div>
           <p>NEXT MILESTONE</p>
-          <h2>Website ownership and My Websites</h2>
-          <span>Attach existing and newly created websites to this account, with one $10/month subscription lifecycle per website.</span>
+          <h2>Full Create Website V2 wizard</h2>
+          <span>Turn a private draft into a configured `nnn` website with branding, features, Deriv setup, preview and deployment preparation.</span>
         </div>
-        <div className="v2-step-number">03</div>
+        <div className="v2-step-number">04</div>
       </section>
     </>
   );
 }
 
-function OverviewView({ onOpenCurrentManager }: { onOpenCurrentManager: () => void }) {
+function OverviewView({ onOpenCurrentManager, onCreateWebsite }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void }) {
   return (
     <>
       <section className="v2-hero-card">
         <div>
-          <p className="v2-kicker">AUTHENTICATION READY</p>
-          <h2>The platform now starts with a real customer account.</h2>
+          <p className="v2-kicker">WEBSITE OWNERSHIP READY</p>
+          <h2>A customer can now start with no website and create an owned draft.</h2>
           <p>
-            The V2 workspace is protected by VPS-ready account authentication while the existing domain manager,
-            site provisioning, bot management and GitHub publishing flow remain available for controlled migration.
+            The platform now knows who owns each website. Every draft starts on the reusable `nnn` template, requires no domain up front,
+            and receives its own future USD 10/month subscription record.
           </p>
         </div>
-        <button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button>
+          <button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button>
+        </div>
       </section>
 
       <section className="v2-grid">
         <article className="v2-card">
           <div className="v2-card-head"><div><span className="v2-card-label">CONTROL PLANE</span><h3>DukeNyamasege/SITE-MANAGER</h3></div><span className="v2-state good">ACTIVE</span></div>
-          <p>This repository remains the customer/admin control plane and owns the website management workflow.</p>
+          <p>Accounts, website ownership and the VPS API now live in the control plane.</p>
         </article>
         <article className="v2-card">
-          <div className="v2-card-head"><div><span className="v2-card-label">SITE RUNTIME</span><h3>DukeNyamasege/nnn</h3></div><span className="v2-state good">ACTIVE</span></div>
-          <p>The reusable trading template remains the runtime used by managed customer websites.</p>
+          <div className="v2-card-head"><div><span className="v2-card-label">SITE TEMPLATE</span><h3>DukeNyamasege/nnn</h3></div><span className="v2-state good">ACTIVE</span></div>
+          <p>Every newly created website record starts with `template_id = nnn`; Step 4 will configure that template per site.</p>
         </article>
         <article className="v2-card">
-          <div className="v2-card-head"><div><span className="v2-card-label">AUTH DATABASE</span><h3>PostgreSQL on VPS</h3></div><span className="v2-state good">V2</span></div>
-          <p>Customer identities, Argon2id password hashes, sessions and recovery tokens now have a VPS-native data model.</p>
+          <div className="v2-card-head"><div><span className="v2-card-label">OWNERSHIP DATABASE</span><h3>PostgreSQL on VPS</h3></div><span className="v2-state good">V2</span></div>
+          <p>Users, websites and one subscription record per website are connected by database foreign keys.</p>
         </article>
       </section>
 
       <section className="v2-section">
-        <div className="v2-section-heading"><div><p>WHAT WE ARE KEEPING</p><h2>Existing working capabilities</h2></div></div>
+        <div className="v2-section-heading"><div><p>STEP 3 FOUNDATION</p><h2>What is working now</h2></div></div>
         <div className="v2-capability-grid">
           {capabilities.map(item => <div className="v2-capability" key={item}><span>✓</span><strong>{item}</strong></div>)}
         </div>
@@ -183,10 +191,10 @@ function OverviewView({ onOpenCurrentManager }: { onOpenCurrentManager: () => vo
       <section className="v2-next-step">
         <div>
           <p>NEXT MILESTONE</p>
-          <h2>Website ownership and My Websites</h2>
-          <span>Every authenticated customer will own one or more websites, including sites created from scratch and existing sites migrated from the current template configuration.</span>
+          <h2>Full Create Website V2 wizard</h2>
+          <span>The next step will take these owned drafts through template configuration, branding, features, Deriv settings, preview and deployment preparation.</span>
         </div>
-        <div className="v2-step-number">03</div>
+        <div className="v2-step-number">04</div>
       </section>
     </>
   );
