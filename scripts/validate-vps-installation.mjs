@@ -18,6 +18,8 @@ const required = [
   'infra/vps/release-nnn.sh',
   'infra/vps/rollback-site-manager.sh',
   'infra/vps/rollback-nnn.sh',
+  'infra/vps/activate-edge.sh',
+  'infra/vps/set-publish-mode.sh',
   'infra/vps/backup-state.sh',
   'infra/vps/README.md',
 ];
@@ -30,6 +32,10 @@ assert.match(service, /EnvironmentFile=-\/etc\/site-manager\/runtime\.env/);
 assert.match(service, /WorkingDirectory=\/srv\/site-manager\/manager\/current/);
 assert.match(service, /ReadWritePaths=\/srv\/site-manager\/data \/etc\/caddy\/sites/);
 assert.ok(!/User=root/.test(service), 'Site Manager service must not run as root.');
+
+const backupService = read('infra/vps/site-manager-backup.service');
+assert.match(backupService, /ExecStart=\/usr\/bin\/bash /);
+assert.match(backupService, /EnvironmentFile=\/etc\/site-manager\/database\.env/);
 
 const caddy = read('infra/vps/Caddyfile.template');
 assert.match(caddy, /__SITE_MANAGER_DOMAIN__/);
@@ -53,10 +59,21 @@ assert.ok(!nnn.includes('git checkout main'), 'nnn release must never silently c
 assert.ok(!nnn.includes('NNN_CUTOVER_APPROVED=YES\n'), 'Release script must not self-enable cutover approval.');
 
 const managerRelease = read('infra/vps/release-site-manager.sh');
-assert.match(managerRelease, /npm run build/);
+assert.match(managerRelease, /VITE_PUBLIC_MAINTENANCE=false npm run build/);
 assert.match(managerRelease, /scripts\/migrate\.mjs/);
 assert.match(managerRelease, /api\/v2\/health/);
 assert.match(managerRelease, /mv -Tf/);
+
+const edge = read('infra/vps/activate-edge.sh');
+assert.match(edge, /EDGE_CUTOVER_APPROVED/);
+assert.match(edge, /site-manager-runtime\.json/);
+assert.match(edge, /caddy validate/);
+assert.match(edge, /systemctl restart caddy/);
+
+const publishMode = read('infra/vps/set-publish-mode.sh');
+assert.match(publishMode, /CUSTOMER_PUBLISH_APPROVED/);
+assert.match(publishMode, /VPS_PUBLISH_MODE=/);
+assert.ok(!publishMode.includes('CUSTOMER_PUBLISH_APPROVED=YES\n'), 'Publish-mode script must not self-approve apply mode.');
 
 const backup = read('infra/vps/backup-state.sh');
 assert.match(backup, /pg_dump --format=custom/);
