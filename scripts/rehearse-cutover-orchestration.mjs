@@ -99,18 +99,20 @@ try {
   assert.equal(firstPlan.rollback_snapshot.rollback_window_minutes, 30);
   assert.equal(firstPlan.production_cutover_performed, false);
 
-  const immutableUpdate = await pool.query('SAVEPOINT before_immutable').then(async () => {
+  let immutableBlocked = false;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
     try {
-      await pool.query(`UPDATE website_cutover_plans SET v2_fingerprint = $1 WHERE id = $2`, ['0'.repeat(64), firstPlan.id]);
-      await pool.query('RELEASE SAVEPOINT before_immutable');
-      return false;
+      await client.query(`UPDATE website_cutover_plans SET v2_fingerprint = $1 WHERE id = $2`, ['0'.repeat(64), firstPlan.id]);
     } catch {
-      await pool.query('ROLLBACK TO SAVEPOINT before_immutable').catch(() => {});
-      await pool.query('RELEASE SAVEPOINT before_immutable').catch(() => {});
-      return true;
+      immutableBlocked = true;
     }
-  }).catch(() => true);
-  assert.equal(immutableUpdate, true, 'Cutover snapshot columns must be immutable.');
+    await client.query('ROLLBACK');
+  } finally {
+    client.release();
+  }
+  assert.equal(immutableBlocked, true, 'Cutover snapshot columns must be immutable.');
 
   const blockedExecution = await request(`/api/v2/admin/cutover/plans/${firstPlan.id}/execute`, adminCookie, { method: 'POST', body: '{}' });
   assert.equal(blockedExecution.response.status, 409);
