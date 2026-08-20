@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppV2 from './AppV2';
 import { AuthProvider, AuthScreen, useAuth } from './auth';
 import { WebsiteBuilderView } from './builder';
 import { CanaryCutoverWorkspace } from './canary';
 import { CutoverOrchestrationWorkspace } from './cutover';
 import { DeploymentsWorkspace } from './deployments';
+import { DomainFirstOnboardingView, type DomainOnboardingIntent } from './domain-onboarding';
 import { DomainsWorkspace } from './domains';
 import { LegacyMigrationWorkspace } from './legacy-migration';
 import { CutoverReadinessWorkspace } from './parity';
@@ -17,10 +18,13 @@ import './customization.css';
 import './netlify-only.css';
 import './v2.css';
 
-type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'canary-cutover' | 'staging-edge' | 'production-eligibility' | 'current-manager' | 'account';
+type WorkspaceView = 'overview' | 'my-websites' | 'domain-onboarding' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'canary-cutover' | 'staging-edge' | 'production-eligibility' | 'current-manager' | 'account';
 
 const capabilities = [
   'Verified customer accounts and VPS sessions',
+  'Domain-first onboarding before any new website is created',
+  'Availability checks with Namecheap premium-domain support and RDAP fallback',
+  'DNS TXT ownership proof before the website builder is unlocked',
   'One customer can own multiple websites',
   'Five-step per-website nnn configuration builder',
   'Live Site Manager → nnn runtime configuration channel',
@@ -67,6 +71,21 @@ function AuthenticatedWorkspace() {
   const [builderWebsiteId, setBuilderWebsiteId] = useState('');
   const [previewWebsiteId, setPreviewWebsiteId] = useState('');
   const [domainWebsiteId, setDomainWebsiteId] = useState('');
+  const [selectedDomainIntent, setSelectedDomainIntent] = useState<DomainOnboardingIntent | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    fetch('/api/v2/websites', { credentials: 'include' })
+      .then(async response => response.ok ? response.json() : null)
+      .then(payload => {
+        if (!active) return;
+        const websites = Array.isArray(payload?.websites) ? payload.websites : [];
+        if (websites.length === 0) setView('domain-onboarding');
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [user?.id]);
 
   if (loading) return <main className="auth-loading">Checking your Site Manager account…</main>;
   if (!user) return <AuthScreen />;
@@ -79,23 +98,27 @@ function AuthenticatedWorkspace() {
   const openPreview = (website: WebsiteRecord) => { setPreviewWebsiteId(website.id); setView('runtime-preview'); };
   const openDomains = (website: WebsiteRecord) => { setDomainWebsiteId(website.id); setView('domains'); };
   const editPreviewedWebsite = () => { if (previewWebsiteId) { setBuilderWebsiteId(previewWebsiteId); setView('builder'); } };
+  const startCreateWebsite = () => { setSelectedDomainIntent(null); setView('domain-onboarding'); };
+  const continueAfterDomain = (intent: DomainOnboardingIntent) => { setSelectedDomainIntent(intent); setView('create-website'); };
 
   const pageTitle = view === 'account' ? 'Your account'
     : view === 'my-websites' ? 'My Websites'
-      : view === 'create-website' ? 'Create Website'
-        : view === 'builder' ? 'Website Builder'
-          : view === 'runtime-preview' ? 'Preview & Assets'
-            : view === 'domains' ? 'Domains'
-              : view === 'deployments' ? 'Deployments'
-                : view === 'legacy-migration' ? 'Legacy nnn Migration'
-                  : view === 'cutover-readiness' ? 'Cutover Readiness'
-                    : view === 'cutover-orchestration' ? 'Cutover Plans'
-                      : view === 'canary-cutover' ? 'Canary Drill'
-                        : view === 'staging-edge' ? 'Staging Edge'
-                          : view === 'production-eligibility' ? 'Production Eligibility'
-                            : 'Site Manager V2';
+      : view === 'domain-onboarding' ? 'Choose Your Domain'
+        : view === 'create-website' ? 'Create Website'
+          : view === 'builder' ? 'Website Builder'
+            : view === 'runtime-preview' ? 'Preview & Assets'
+              : view === 'domains' ? 'Domains'
+                : view === 'deployments' ? 'Deployments'
+                  : view === 'legacy-migration' ? 'Legacy nnn Migration'
+                    : view === 'cutover-readiness' ? 'Cutover Readiness'
+                      : view === 'cutover-orchestration' ? 'Cutover Plans'
+                        : view === 'canary-cutover' ? 'Canary Drill'
+                          : view === 'staging-edge' ? 'Staging Edge'
+                            : view === 'production-eligibility' ? 'Production Eligibility'
+                              : 'Site Manager V2';
 
   const websitesActive = ['my-websites', 'builder', 'runtime-preview'].includes(view);
+  const createActive = ['domain-onboarding', 'create-website'].includes(view);
 
   return <div className="v2-shell">
     <aside className="v2-sidebar">
@@ -103,7 +126,7 @@ function AuthenticatedWorkspace() {
       <nav className="v2-nav" aria-label="Site Manager V2 development navigation">
         <button className={view === 'overview' ? 'is-active' : ''} type="button" onClick={() => setView('overview')}>Overview</button>
         <button className={websitesActive ? 'is-active' : ''} type="button" onClick={() => setView('my-websites')}>My Websites</button>
-        <button className={view === 'create-website' ? 'is-active' : ''} type="button" onClick={() => setView('create-website')}>Create Website</button>
+        <button className={createActive ? 'is-active' : ''} type="button" onClick={startCreateWebsite}>Create Website</button>
         <button type="button" disabled>Templates</button>
         <button className={view === 'domains' ? 'is-active' : ''} type="button" onClick={() => setView('domains')}>Domains</button>
         <button className={view === 'deployments' ? 'is-active' : ''} type="button" onClick={() => setView('deployments')}>Deployments</button>
@@ -121,9 +144,11 @@ function AuthenticatedWorkspace() {
     <main className="v2-main">
       <header className="v2-topbar"><div><p>DEVELOPMENT WORKSPACE</p><h1>{pageTitle}</h1></div><div className="v2-account-chip"><div><strong>{user.display_name || 'Site Manager customer'}</strong><small>{user.email}</small></div><button type="button" onClick={() => void logout()}>Sign out</button></div></header>
       {view === 'account' && <AccountView />}
-      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} onOpenCanary={() => setView('canary-cutover')} onOpenStaging={() => setView('staging-edge')} onOpenEligibility={() => setView('production-eligibility')} />}
-      {view === 'my-websites' && <MyWebsitesView onCreateWebsite={() => setView('create-website')} onContinueSetup={openBuilder} onPreviewWebsite={openPreview} onManageDomains={openDomains} />}
-      {view === 'create-website' && <CreateWebsiteView onCreated={openBuilder} onCancel={() => setView('my-websites')} />}
+      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={startCreateWebsite} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} onOpenCanary={() => setView('canary-cutover')} onOpenStaging={() => setView('staging-edge')} onOpenEligibility={() => setView('production-eligibility')} />}
+      {view === 'my-websites' && <MyWebsitesView onCreateWebsite={startCreateWebsite} onContinueSetup={openBuilder} onPreviewWebsite={openPreview} onManageDomains={openDomains} />}
+      {view === 'domain-onboarding' && <DomainFirstOnboardingView onVerified={continueAfterDomain} onCancel={() => setView('my-websites')} />}
+      {view === 'create-website' && selectedDomainIntent && <CreateWebsiteView domainOnboardingId={selectedDomainIntent.id} domainHostname={selectedDomainIntent.hostname} onCreated={openBuilder} onCancel={() => setView('domain-onboarding')} />}
+      {view === 'create-website' && !selectedDomainIntent && <DomainFirstOnboardingView onVerified={continueAfterDomain} onCancel={() => setView('my-websites')} />}
       {view === 'builder' && builderWebsiteId && <WebsiteBuilderView websiteId={builderWebsiteId} onBack={() => setView('my-websites')} onCompleted={() => setView('my-websites')} />}
       {view === 'runtime-preview' && previewWebsiteId && <RuntimePreviewView websiteId={previewWebsiteId} onBack={() => setView('my-websites')} onEditSetup={editPreviewedWebsite} />}
       {view === 'domains' && <DomainsWorkspace initialWebsiteId={domainWebsiteId} focus="domains" />}
@@ -145,6 +170,7 @@ function AccountView() {
     <section className="v2-hero-card"><div><p className="v2-kicker">STEP 15 · PRODUCTION ELIGIBILITY + FINAL APPROVAL</p><h2>Production readiness is now a short-lived, immutable evidence state rather than a loose operator decision.</h2><p>Step 15 binds current parity, the armed cutover plan, passed canary, fresh real staging rehearsal, exact held nnn SHA, hostname, V2 fingerprint and rollback evidence. Final approval records authorization, but execution remains unavailable.</p></div></section>
     <section className="v2-grid">
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EMAIL</span><h3>{user.email}</h3></div><span className="v2-state good">VERIFIED</span></div><p>Email verification protects the customer control plane.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">NEW SITE ONBOARDING</span><h3>Domain first</h3></div><span className="v2-state good">ENFORCED</span></div><p>New sites cannot be created until the intended custom domain has been checked, acquired and ownership-verified.</p></article>
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">FINAL APPROVAL</span><h3>Evidence-bound</h3></div><span className="v2-state good">ADMIN ONLY</span></div><p>Approval expires and becomes invalid if staging evidence, configuration, source or runtime evidence stops matching.</p></article>
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in production eligibility.</p></article>
     </section>
@@ -154,8 +180,9 @@ function AccountView() {
 
 function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity, onOpenCutover, onOpenCanary, onOpenStaging, onOpenEligibility }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void; onOpenCutover: () => void; onOpenCanary: () => void; onOpenStaging: () => void; onOpenEligibility: () => void }) {
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 15 · PRODUCTION CUTOVER ELIGIBILITY + FINAL APPROVAL GATE</p><h2>A migrated site cannot become production eligible until the complete evidence chain still matches right now.</h2><p>Site Manager joins Step 11 parity, the Step 12 immutable armed plan, the Step 13 passed canary, the fresh Step 14 real HTTPS staging pass, the held nnn contract, current V2 fingerprint, primary hostname and rollback evidence into one immutable short-lived record. Final admin approval still does not move traffic.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenEligibility}>Open production eligibility</button><button className="v2-primary-button" type="button" onClick={onOpenStaging}>Open staging edge</button><button className="v2-primary-button" type="button" onClick={onOpenCanary}>Open canary drill</button><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">DOMAIN-FIRST CUSTOMER ONBOARDING + STEP 15 OPERATIONS</p><h2>New customers secure the domain before Site Manager lets them spend time configuring a website.</h2><p>The first-site journey now checks availability, flags premium domains when Namecheap data is available, sends the customer to the registrar for the live price/purchase, verifies ownership through DNS TXT, and only then creates the website. Existing migration/cutover controls remain unchanged.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Find domain & create site</button><button className="v2-primary-button" type="button" onClick={onOpenEligibility}>Open production eligibility</button><button className="v2-primary-button" type="button" onClick={onOpenStaging}>Open staging edge</button><button className="v2-primary-button" type="button" onClick={onOpenCanary}>Open canary drill</button><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
     <section className="v2-grid">
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">NEW CUSTOMER</span><h3>Domain first</h3></div><span className="v2-state good">HARD GATE</span></div><p>Website creation consumes a verified domain record, so the API cannot bypass the onboarding screen.</p></article>
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EVIDENCE</span><h3>Immutable</h3></div><span className="v2-state good">STEP 15</span></div><p>The exact source, held nnn SHA, V2 fingerprint, hostname, upstream run IDs and rollback snapshot are frozen.</p></article>
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">FRESHNESS</span><h3>Short lived</h3></div><span className="v2-state good">RECHECKED</span></div><p>Old staging evidence or changed source/configuration invalidates eligibility instead of carrying approval forward.</p></article>
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Still unchanged</h3></div><span className="v2-state good">LOCKED</span></div><p>The Step 15 API has an explicit execute route only to return 409 and record that execution was blocked.</p></article>
