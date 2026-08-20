@@ -105,9 +105,6 @@ SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
 MAIL_FROM="Site Manager <no-reply@${SITE_MANAGER_DOMAIN}>"
-GITHUB_TOKEN=
-TARGET_REPO=DukeNyamasege/nnn
-TARGET_BRANCH=main
 DOMAIN_VERIFICATION_SECRET=
 EOF
 fi
@@ -148,4 +145,5 @@ else
 fi
 
 echo "VPS filesystem and service layout prepared."
+echo "No GitHub/nnn production-write credentials were installed on the VPS."
 echo "Next: run provision-postgres.sh, install a Site Manager release, then install the explicitly approved nnn integration release."
