@@ -49,6 +49,8 @@ assert.match(host, /VPS_PUBLISH_MODE=plan/);
 assert.match(host, /NNN_SHARED_DIST_DIR=\/srv\/site-manager\/nnn\/current/);
 assert.match(host, /install -d -m 2770 -o root -g site-manager-runtime \/etc\/caddy\/sites/);
 assert.ok(!host.includes('VPS_PUBLISH_MODE=apply'), 'Host bootstrap must not enable customer publishing apply mode.');
+assert.ok(!host.includes('GITHUB_TOKEN='), 'Production VPS bootstrap must not install GitHub write credentials.');
+assert.ok(!host.includes('TARGET_BRANCH=main'), 'Production VPS bootstrap must not carry an nnn/main write target.');
 
 const nnn = read('infra/vps/release-nnn.sh');
 assert.match(nnn, /NNN_CUTOVER_APPROVED/);
