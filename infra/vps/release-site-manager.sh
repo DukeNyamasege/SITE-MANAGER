@@ -6,7 +6,7 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   exit 1
 fi
 if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 <git-ref-or-commit>" >&2
+  echo "Usage: bash $0 <git-ref-or-commit>" >&2
   exit 1
 fi
 
@@ -40,7 +40,9 @@ RELEASE="$RELEASE_ROOT/${STAMP}-${SHORT}"
 
 cd "$WORK"
 npm ci --no-audit --no-fund
-npm run build
+# The VPS manager is the actual V2 control plane, not the legacy public Netlify
+# maintenance deployment. Keep the Netlify gate independent and explicitly build V2 here.
+VITE_PUBLIC_MAINTENANCE=false npm run build
 npm prune --omit=dev --no-audit --no-fund
 
 install -d -m 0750 -o root -g site-manager-runtime "$RELEASE"
@@ -52,6 +54,7 @@ cat >"$RELEASE/site-manager-release.json" <<EOF
   "installed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+printf '%s\n' "$SHA" >"$RELEASE/.site-manager-source-sha"
 chown -R root:site-manager-runtime "$RELEASE"
 chmod -R g+rX,o-rwx "$RELEASE"
 
@@ -76,10 +79,17 @@ rollback() {
     ln -s "$PREVIOUS" "$back"
     mv -Tf "$back" "$CURRENT"
     systemctl restart site-manager.service || true
+  else
+    rm -f "$CURRENT"
+    systemctl stop site-manager.service || true
   fi
 }
 
-systemctl restart site-manager.service
+if ! systemctl restart site-manager.service; then
+  echo "Candidate Site Manager service failed to start; restoring the previous release." >&2
+  rollback
+  exit 1
+fi
 healthy=0
 for _ in {1..15}; do
   if curl -fsS --max-time 3 http://127.0.0.1:8787/api/v2/health >/dev/null; then
@@ -95,5 +105,4 @@ if [[ "$healthy" -ne 1 ]]; then
 fi
 
 systemctl start site-manager-backup.timer
-printf '%s\n' "$SHA" >"$ROOT/manager/current/.site-manager-source-sha"
 echo "Site Manager release active: $RELEASE ($SHA)"
