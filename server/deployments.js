@@ -13,7 +13,7 @@ router.use(requireAuthenticatedUser);
 
 async function technicalReadiness(websiteId, userId) {
   const result = await query(
-    `SELECT w.id, w.name, w.site_key, w.status, w.preview_approved_at, w.deployment_status,
+    `SELECT w.id, w.name, w.site_key, w.source, w.status, w.preview_approved_at, w.deployment_status,
             c.configuration_status, c.deriv_client_id, c.deriv_environment,
             d.id AS domain_id, d.hostname, d.kind AS domain_kind,
             d.ownership_status, d.routing_status, d.ssl_status
@@ -40,6 +40,7 @@ async function technicalReadiness(websiteId, userId) {
       id: row.id,
       name: row.name,
       site_key: row.site_key,
+      source: row.source,
       status: row.status,
       deployment_status: row.deployment_status,
     },
@@ -119,6 +120,13 @@ router.post('/:websiteId/publish', async (request, response, next) => {
   try {
     const readiness = await technicalReadiness(request.params.websiteId, request.authUser.id);
     if (!readiness) return response.status(404).json({ message: 'Website not found.' });
+    if (readiness.website.source === 'migrated') {
+      return response.status(409).json({
+        message: 'Migrated legacy nnn sites cannot use the ordinary customer publish path. They must pass parity, an immutable admin cutover plan and the canary execution gate.',
+        cutover_required: true,
+        readiness,
+      });
+    }
     if (!readiness.deployment_ready || !readiness.primary_domain?.hostname) {
       return response.status(409).json({
         message: 'This website has not passed the technical deployment gate.',

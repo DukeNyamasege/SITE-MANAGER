@@ -81,10 +81,14 @@ async function evidenceForSite(siteId, customizationSource, freeBotManifestPath)
   const runtimeContract = await optionalJson(path.join(heldDir, 'public', 'site-manager-runtime.json'));
   const cutoverContractVersion = Number(runtimeContract?.cutover_contract_version || 0);
   const cutoverContractCompatible = cutoverContractVersion === 1;
+  const canaryContractVersion = Number(runtimeContract?.canary_contract_version || 0);
+  const canaryContractCompatible = canaryContractVersion === 1;
   const runtimeContractCompatible = Number(runtimeContract?.contract_version) === 2
     && Number(runtimeContract?.migration_contract_version) === 1
     && cutoverContractCompatible
-    && runtimeContract?.runtime === 'nnn';
+    && canaryContractCompatible
+    && runtimeContract?.runtime === 'nnn'
+    && runtimeContract?.deployment_model === 'shared-static-runtime';
 
   return {
     registry_entry_match: Boolean(liveEntry && heldEntry && JSON.stringify(liveEntry) === JSON.stringify(heldEntry)),
@@ -94,6 +98,8 @@ async function evidenceForSite(siteId, customizationSource, freeBotManifestPath)
     runtime_contract_compatible: runtimeContractCompatible,
     cutover_contract_version: cutoverContractVersion,
     cutover_contract_compatible: cutoverContractCompatible,
+    canary_contract_version: canaryContractVersion,
+    canary_contract_compatible: canaryContractCompatible,
     bot_asset_checks: assetChecks,
   };
 }
@@ -182,6 +188,7 @@ const report = {
   legacy_source_commit: legacySha,
   held_runtime_commit: heldSha,
   cutover_contract_version: 1,
+  canary_contract_version: 1,
   assigned_sites: results.length,
   parity_ready: results.filter(item => item.cutover_ready).length,
   blocked: results.filter(item => !item.cutover_ready).length,
