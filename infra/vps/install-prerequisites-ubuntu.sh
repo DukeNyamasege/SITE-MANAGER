@@ -19,7 +19,7 @@ esac
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y ca-certificates curl gnupg git rsync jq postgresql postgresql-client
+apt-get install -y ca-certificates curl gnupg git rsync jq openssl postgresql postgresql-client
 install -d -m 0755 /etc/apt/keyrings
 
 need_node=1
