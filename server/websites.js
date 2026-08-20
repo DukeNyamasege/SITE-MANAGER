@@ -79,7 +79,14 @@ router.get('/', async (request, response, next) => {
 router.post('/', async (request, response, next) => {
   try {
     const name = safeWebsiteName(request.body?.name);
+    const domainOnboardingId = String(request.body?.domain_onboarding_id || '').trim();
     if (name.length < 2) return response.status(400).json({ message: 'Website name must be at least 2 characters.' });
+    if (!domainOnboardingId) {
+      return response.status(409).json({
+        message: 'Choose, purchase and verify your domain before creating the website.',
+        code: 'domain_first_required',
+      });
+    }
 
     const duplicate = await query(
       `SELECT id FROM websites
@@ -92,15 +99,47 @@ router.post('/', async (request, response, next) => {
     if (duplicate.rows[0]) return response.status(409).json({ message: 'You already have a website with this name.' });
 
     const created = await transaction(async client => {
+      const onboarding = (await client.query(
+        `SELECT * FROM domain_onboarding_intents
+          WHERE id = $1 AND user_id = $2
+          FOR UPDATE`,
+        [domainOnboardingId, request.authUser.id],
+      )).rows[0];
+      if (!onboarding) {
+        const error = new Error('Domain onboarding record not found. Search and verify the domain first.');
+        error.status = 409;
+        throw error;
+      }
+      if (onboarding.claimed_website_id || onboarding.status === 'claimed') {
+        const error = new Error('This verified domain has already been used to create a website.');
+        error.status = 409;
+        throw error;
+      }
+      if (onboarding.purchase_status !== 'confirmed' || onboarding.ownership_status !== 'verified' || onboarding.status !== 'verified') {
+        const error = new Error('Domain purchase/ownership must be confirmed before website creation.');
+        error.status = 409;
+        throw error;
+      }
+
+      const existingDomain = (await client.query(
+        'SELECT website_id FROM website_domains WHERE LOWER(hostname) = LOWER($1) LIMIT 1',
+        [onboarding.hostname],
+      )).rows[0];
+      if (existingDomain) {
+        const error = new Error('That domain is already attached to another Site Manager website.');
+        error.status = 409;
+        throw error;
+      }
+
       let website;
       for (let attempt = 0; attempt < 4 && !website; attempt += 1) {
         const siteKey = siteKeyFor(name);
         try {
           const result = await client.query(
-            `INSERT INTO websites (owner_user_id, name, site_key, template_id)
-             VALUES ($1, $2, $3, 'nnn')
+            `INSERT INTO websites (owner_user_id, name, site_key, template_id, primary_domain, domain_status)
+             VALUES ($1, $2, $3, 'nnn', $4, 'pending')
              RETURNING id`,
-            [request.authUser.id, name, siteKey],
+            [request.authUser.id, name, siteKey, onboarding.hostname],
           );
           website = result.rows[0];
         } catch (error) {
@@ -113,6 +152,24 @@ router.post('/', async (request, response, next) => {
         `INSERT INTO website_subscriptions (website_id, price_cents, currency, billing_status)
          VALUES ($1, 1000, 'USD', 'not_started')`,
         [website.id],
+      );
+
+      await client.query(
+        `INSERT INTO website_domains
+           (website_id, hostname, kind, is_primary, ownership_status, routing_status, ssl_status,
+            verification_token, verification_record_name, verification_record_value,
+            last_checked_at, ownership_verified_at)
+         VALUES ($1,$2,'custom',TRUE,'verified','pending','pending',$3,$4,$5,NOW(),$6)`,
+        [website.id, onboarding.hostname, onboarding.verification_token,
+          onboarding.verification_record_name, onboarding.verification_record_value,
+          onboarding.ownership_verified_at || new Date()],
+      );
+
+      await client.query(
+        `UPDATE domain_onboarding_intents
+            SET status = 'claimed', claimed_website_id = $1, updated_at = NOW()
+          WHERE id = $2`,
+        [website.id, onboarding.id],
       );
 
       const result = await client.query(`${selectWebsite} WHERE w.id = $1 AND w.owner_user_id = $2`, [website.id, request.authUser.id]);
