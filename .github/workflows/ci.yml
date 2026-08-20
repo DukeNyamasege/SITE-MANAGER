@@ -69,5 +69,8 @@ jobs:
       - name: Apply PostgreSQL migrations
         run: npm run db:migrate
 
+      - name: Validate VPS domain readiness schema
+        run: node scripts/validate-domain-schema.mjs
+
       - name: Build production bundle
         run: npm run build

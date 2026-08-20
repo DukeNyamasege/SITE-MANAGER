@@ -15,10 +15,7 @@ assert.deepEqual(Object.keys(NNN_DEFAULT_COLORS).sort(), [
   'header_background', 'nav_background', 'nav_text', 'primary', 'secondary',
 ]);
 
-const website = {
-  site_key: 'demo-site-123',
-  primary_domain: null,
-};
+const website = { site_key: 'demo-site-123', primary_domain: null };
 const config = {
   brand_name: 'Demo Site',
   navigation: ['free_bots', 'dashboard', 'free_bots', 'unknown'],
@@ -36,12 +33,13 @@ assert.equal(toNnnRegistryEntry(website, config), null);
 assert.equal(builderReadiness(website, config).configuration_ready, true);
 assert.equal(builderReadiness(website, config).deployment_ready, false);
 
-const deployableWebsite = { ...website, primary_domain: 'example.com' };
-const deployableConfig = { ...config, deriv_client_id: '33ExampleClient123' };
-const registry = toNnnRegistryEntry(deployableWebsite, deployableConfig);
+const registryWebsite = { ...website, primary_domain: 'example.com' };
+const registryConfig = { ...config, deriv_client_id: '33ExampleClient123' };
+const registry = toNnnRegistryEntry(registryWebsite, registryConfig);
 assert.equal(registry?.id, website.site_key);
 assert.deepEqual(registry?.hosts, ['example.com', 'www.example.com']);
 assert.equal(registry?.redirect_uri, 'https://example.com/callback');
-assert.equal(builderReadiness(deployableWebsite, deployableConfig).deployment_ready, true);
+// Step 6 intentionally keeps builder readiness separate from authoritative VPS deployment readiness.
+assert.equal(builderReadiness(registryWebsite, registryConfig).deployment_ready, false);
 
 console.log('nnn builder contract validation passed.');
