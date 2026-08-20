@@ -5,6 +5,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import authRouter from './auth.js';
+import websitesRouter from './websites.js';
 import { getPool } from './db.js';
 
 const app = express();
@@ -39,6 +40,15 @@ const sensitiveLimiter = rateLimit({
   message: { message: 'Too many attempts. Try again later.' },
 });
 
+const websiteMutationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: request => ['GET', 'HEAD', 'OPTIONS'].includes(request.method),
+  message: { message: 'Too many website changes. Try again later.' },
+});
+
 app.get('/api/v2/health', async (_request, response, next) => {
   try {
     await getPool().query('SELECT 1');
@@ -54,6 +64,8 @@ app.use('/api/v2/auth/register', sensitiveLimiter);
 app.use('/api/v2/auth/forgot-password', sensitiveLimiter);
 app.use('/api/v2/auth/reset-password', sensitiveLimiter);
 app.use('/api/v2/auth', authRouter);
+
+app.use('/api/v2/websites', websiteMutationLimiter, websitesRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
