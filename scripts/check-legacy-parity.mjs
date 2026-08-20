@@ -83,10 +83,13 @@ async function evidenceForSite(siteId, customizationSource, freeBotManifestPath)
   const cutoverContractCompatible = cutoverContractVersion === 1;
   const canaryContractVersion = Number(runtimeContract?.canary_contract_version || 0);
   const canaryContractCompatible = canaryContractVersion === 1;
+  const stagingEdgeContractVersion = Number(runtimeContract?.staging_edge_contract_version || 0);
+  const stagingEdgeContractCompatible = stagingEdgeContractVersion === 1;
   const runtimeContractCompatible = Number(runtimeContract?.contract_version) === 2
     && Number(runtimeContract?.migration_contract_version) === 1
     && cutoverContractCompatible
     && canaryContractCompatible
+    && stagingEdgeContractCompatible
     && runtimeContract?.runtime === 'nnn'
     && runtimeContract?.deployment_model === 'shared-static-runtime';
 
@@ -100,6 +103,8 @@ async function evidenceForSite(siteId, customizationSource, freeBotManifestPath)
     cutover_contract_compatible: cutoverContractCompatible,
     canary_contract_version: canaryContractVersion,
     canary_contract_compatible: canaryContractCompatible,
+    staging_edge_contract_version: stagingEdgeContractVersion,
+    staging_edge_contract_compatible: stagingEdgeContractCompatible,
     bot_asset_checks: assetChecks,
   };
 }
@@ -189,6 +194,7 @@ const report = {
   held_runtime_commit: heldSha,
   cutover_contract_version: 1,
   canary_contract_version: 1,
+  staging_edge_contract_version: 1,
   assigned_sites: results.length,
   parity_ready: results.filter(item => item.cutover_ready).length,
   blocked: results.filter(item => !item.cutover_ready).length,
