@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import authRouter from './auth.js';
 import adminRouter from './admin.js';
+import cutoverRouter from './cutover.js';
 import websitesRouter from './websites.js';
 import builderRouter from './builder.js';
 import previewRouter from './preview.js';
@@ -82,6 +83,7 @@ app.use('/api/v2/preview', websiteMutationLimiter, previewRouter);
 app.use('/api/v2/domains', websiteMutationLimiter, domainsRouter);
 app.use('/api/v2/deployments', websiteMutationLimiter, deploymentsRouter);
 app.use('/api/v2/parity', websiteMutationLimiter, parityRouter);
+app.use('/api/v2/admin/cutover', websiteMutationLimiter, cutoverRouter);
 app.use('/api/v2/admin', websiteMutationLimiter, adminRouter);
 
 if (process.env.NODE_ENV === 'production') {

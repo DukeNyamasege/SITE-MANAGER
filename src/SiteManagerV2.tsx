@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AppV2 from './AppV2';
 import { AuthProvider, AuthScreen, useAuth } from './auth';
 import { WebsiteBuilderView } from './builder';
+import { CutoverOrchestrationWorkspace } from './cutover';
 import { DeploymentsWorkspace } from './deployments';
 import { DomainsWorkspace } from './domains';
 import { LegacyMigrationWorkspace } from './legacy-migration';
@@ -13,7 +14,7 @@ import './customization.css';
 import './netlify-only.css';
 import './v2.css';
 
-type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'current-manager' | 'account';
+type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'current-manager' | 'account';
 
 const capabilities = [
   'Verified customer accounts and VPS sessions',
@@ -35,6 +36,10 @@ const capabilities = [
   'Stable-live versus held-runtime registry, customization and bot-asset parity',
   'Preview approval automatically invalidated by configuration changes',
   'Fail-closed per-site cutover readiness with stale-evidence detection',
+  'Immutable operator cutover plans pinned to exact parity evidence',
+  'Cutover arming revalidates source, held nnn, V2 and VPS target state',
+  'Rollback target and rollback-window policy frozen before execution',
+  'Production execution explicitly disabled until the next milestone',
   'nnn production main isolated until explicit final cutover',
   'Payment lifecycle intentionally deferred',
 ];
@@ -71,7 +76,8 @@ function AuthenticatedWorkspace() {
               : view === 'deployments' ? 'Deployments'
                 : view === 'legacy-migration' ? 'Legacy nnn Migration'
                   : view === 'cutover-readiness' ? 'Cutover Readiness'
-                    : 'Site Manager V2';
+                    : view === 'cutover-orchestration' ? 'Cutover Plans'
+                      : 'Site Manager V2';
 
   const websitesActive = ['my-websites', 'builder', 'runtime-preview'].includes(view);
 
@@ -87,6 +93,7 @@ function AuthenticatedWorkspace() {
         <button className={view === 'deployments' ? 'is-active' : ''} type="button" onClick={() => setView('deployments')}>Deployments</button>
         <button className={view === 'legacy-migration' ? 'is-active' : ''} type="button" onClick={() => setView('legacy-migration')}>Legacy Migration</button>
         <button className={view === 'cutover-readiness' ? 'is-active' : ''} type="button" onClick={() => setView('cutover-readiness')}>Cutover Readiness</button>
+        <button className={view === 'cutover-orchestration' ? 'is-active' : ''} type="button" onClick={() => setView('cutover-orchestration')}>Cutover Plans</button>
         <button className={view === 'account' ? 'is-active' : ''} type="button" onClick={() => setView('account')}>Account</button>
       </nav>
       <div className="v2-sidebar-footer"><span className="v2-status-dot" />Netlify deployment paused</div>
@@ -95,7 +102,7 @@ function AuthenticatedWorkspace() {
     <main className="v2-main">
       <header className="v2-topbar"><div><p>DEVELOPMENT WORKSPACE</p><h1>{pageTitle}</h1></div><div className="v2-account-chip"><div><strong>{user.display_name || 'Site Manager customer'}</strong><small>{user.email}</small></div><button type="button" onClick={() => void logout()}>Sign out</button></div></header>
       {view === 'account' && <AccountView />}
-      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} />}
+      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} />}
       {view === 'my-websites' && <MyWebsitesView onCreateWebsite={() => setView('create-website')} onContinueSetup={openBuilder} onPreviewWebsite={openPreview} onManageDomains={openDomains} />}
       {view === 'create-website' && <CreateWebsiteView onCreated={openBuilder} onCancel={() => setView('my-websites')} />}
       {view === 'builder' && builderWebsiteId && <WebsiteBuilderView websiteId={builderWebsiteId} onBack={() => setView('my-websites')} onCompleted={() => setView('my-websites')} />}
@@ -104,6 +111,7 @@ function AuthenticatedWorkspace() {
       {view === 'deployments' && <DeploymentsWorkspace initialWebsiteId={domainWebsiteId} />}
       {view === 'legacy-migration' && <LegacyMigrationWorkspace />}
       {view === 'cutover-readiness' && <CutoverReadinessWorkspace />}
+      {view === 'cutover-orchestration' && <CutoverOrchestrationWorkspace />}
     </main>
   </div>;
 }
@@ -112,25 +120,25 @@ function AccountView() {
   const { user } = useAuth();
   if (!user) return null;
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 11 · DUAL-RUN PARITY</p><h2>Migrated sites now have a fail-closed readiness gate before production cutover.</h2><p>Site Manager compares the current V2 shadow with the latest audited live nnn source and held integration runtime. Configuration edits invalidate preview approval, source drift invalidates runtime evidence, and any mismatch blocks cutover readiness.</p></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 12 · CONTROLLED CUTOVER ORCHESTRATION</p><h2>Parity-ready sites can now be frozen into immutable operator plans without moving production traffic.</h2><p>Each plan records the exact live-source fingerprint, held nnn release, V2 fingerprint, primary hostname, callback, runtime health contract and legacy rollback target. Any later drift invalidates the plan instead of mutating it.</p></div></section>
     <section className="v2-grid">
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EMAIL</span><h3>{user.email}</h3></div><span className="v2-state good">VERIFIED</span></div><p>Email verification protects the customer control plane.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PARITY</span><h3>Fail closed</h3></div><span className="v2-state good">EVIDENCE</span></div><p>A site is ready only when every live/V2/runtime check passes against current fingerprints.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in parity or cutover readiness.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CUTOVER</span><h3>Plan → arm</h3></div><span className="v2-state good">FAIL CLOSED</span></div><p>Arming requires current parity, the exact held nnn contract and a configured VPS target. It still cannot execute traffic cutover.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in migration, parity or cutover planning.</p></article>
     </section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Controlled cutover orchestration and rollback window</h2><span>Step 12 will consume only parity-ready sites, create an explicit operator-approved cutover plan, preserve the old production route for rollback, and still require a separate final action before customer traffic moves.</span></div><div className="v2-step-number">12</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Canary cutover execution and rollback drill</h2><span>Step 13 will introduce the separate execution contract: one explicitly selected parity-ready, armed site at a time, post-cutover health verification and an immediate rollback path if the shared nnn runtime is unhealthy.</span></div><div className="v2-step-number">13</div></section>
   </>;
 }
 
-function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void }) {
+function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity, onOpenCutover }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void; onOpenCutover: () => void }) {
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 11 · DUAL-RUN PARITY & CUTOVER READINESS</p><h2>Migrated V2 shadows can now prove equivalence to their still-live nnn source without changing production traffic.</h2><p>Database configuration, domain aliases, Deriv OAuth settings, branding, preview approval, stable-source fingerprints, held registry/customization files and every referenced site bot asset are checked independently. One failure blocks readiness.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open cutover readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 12 · CONTROLLED CUTOVER ORCHESTRATION</p><h2>Production migration now has an immutable operator planning layer between parity and traffic movement.</h2><p>A cutover plan can only be prepared from current Step 11 parity-ready evidence. It pins the exact stable-live source, held nnn release, V2 state and rollback target, then rechecks those values before arming. No Step 12 action can execute production cutover.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
     <section className="v2-grid">
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">LIVE ↔ V2</span><h3>Current-state parity</h3></div><span className="v2-state good">RECOMPUTED</span></div><p>Every readiness read compares the latest V2 configuration and domains directly with the current audited legacy snapshot.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">HELD RUNTIME</span><h3>Asset parity</h3></div><span className="v2-state good">FINGERPRINTED</span></div><p>Registry, customization/defaults, bot manifests and referenced bot files are compared between exact stable-live and held-runtime Git checkouts.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>No cutover</h3></div><span className="v2-state good">LOCKED</span></div><p>The Step 11 database contract keeps production_cutover_performed false. Readiness evidence cannot move traffic.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PLAN</span><h3>Immutable evidence</h3></div><span className="v2-state good">PINNED</span></div><p>Source SHA/fingerprint, held runtime SHA, V2 fingerprint, primary hostname, parity report and rollback target cannot be edited after plan creation.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">ARM</span><h3>Revalidate first</h3></div><span className="v2-state good">CURRENT ONLY</span></div><p>Source drift, V2 edits, held-runtime changes, expiry or a missing VPS target invalidate or block the plan.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Execution disabled</h3></div><span className="v2-state good">LOCKED</span></div><p>Step 12 exposes no traffic-moving implementation. The database continues to constrain production_cutover_performed to false.</p></article>
     </section>
     <section className="v2-section"><div className="v2-section-heading"><div><p>FOUNDATION</p><h2>What is working now</h2></div></div><div className="v2-capability-grid">{capabilities.map(item => <div className="v2-capability" key={item}><span>✓</span><strong>{item}</strong></div>)}</div></section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Controlled cutover orchestration and rollback window</h2><span>Step 12 will build an operator-approved per-site cutover plan from parity-ready evidence, stage rollback information and require an explicit later action before production routing changes.</span></div><div className="v2-step-number">12</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Canary cutover execution and rollback drill</h2><span>Step 13 will add the separate operator execution boundary, post-cutover nnn health verification, single-site canary sequencing and rollback activation without enabling broad multi-site migration at once.</span></div><div className="v2-step-number">13</div></section>
   </>;
 }
