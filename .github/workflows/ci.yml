@@ -39,6 +39,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/site_manager_test
       DATABASE_SSL: "false"
       VPS_PUBLISH_MODE: plan
+      VPS_PUBLIC_IPV4: 203.0.113.10
       NNN_RUNTIME_RELEASE: nnn-ci-test
       NNN_SHARED_DIST_DIR: /srv/site-manager/nnn/current
       SITE_MANAGER_API_UPSTREAM: http://127.0.0.1:8787
@@ -139,6 +140,9 @@ jobs:
           export NNN_HELD_EXPECTED_SHA="$(git -C .staging/nnn rev-parse HEAD)"
           node scripts/rehearse-dual-run-parity.mjs
 
+      - name: Rehearse immutable cutover planning and invalidation
+        run: node scripts/rehearse-cutover-orchestration.mjs | tee ${{ runner.temp }}/cutover-orchestration-node-${{ matrix.node-version }}.json
+
       - name: Validate staging rehearsal safety contract
         run: node scripts/validate-staging-rehearsal.mjs
 
@@ -151,13 +155,14 @@ jobs:
           NNN_REHEARSAL_RELEASE="$NNN_SHA" \
           node scripts/rehearse-staging.mjs
 
-      - name: Upload migration, parity and staging reports
+      - name: Upload migration, parity, cutover and staging reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step11-rehearsal-node-${{ matrix.node-version }}
+          name: step12-rehearsal-node-${{ matrix.node-version }}
           path: |
             ${{ runner.temp }}/legacy-nnn-audit-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/dual-run-parity-node-${{ matrix.node-version }}.json
+            ${{ runner.temp }}/cutover-orchestration-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/site-manager-rehearsals
           if-no-files-found: ignore
