@@ -107,8 +107,10 @@ function managedRoutePath(filepath, settings) {
 export async function prepareDeploymentFiles(manifest) {
   const settings = publisherSettings();
   const manifestPath = path.join(settings.stateDir, 'manifests', `${manifest.deployment_id}.json`);
-  const routePath = path.join(settings.routeDir, `${manifest.hostname}.caddy`);
-  const previousRoute = await readOptional(routePath);
+  const routePath = settings.mode === 'apply'
+    ? path.join(settings.routeDir, `${manifest.hostname}.caddy`)
+    : path.join(settings.stateDir, 'planned-routes', `${manifest.deployment_id}-${manifest.hostname}.caddy`);
+  const previousRoute = settings.mode === 'apply' ? await readOptional(routePath) : null;
   await atomicWrite(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await atomicWrite(routePath, buildCaddySite(manifest));
   return { manifestPath, routePath, previousRoute, settings };
@@ -188,7 +190,7 @@ export async function publishSharedRuntime(manifest, { retireRoutePaths = [] } =
       status: 'prepared',
       route_path: prepared.routePath,
       manifest_path: prepared.manifestPath,
-      message: 'Deployment plan prepared. VPS apply mode is disabled.',
+      message: 'Deployment plan prepared outside the live Caddy route directory. VPS apply mode is disabled.',
     };
   }
 
