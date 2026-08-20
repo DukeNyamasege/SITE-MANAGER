@@ -1,0 +1,130 @@
+.production-eligibility-page {
+  display: grid;
+  gap: 18px;
+}
+
+.eligibility-hero {
+  align-items: center;
+}
+
+.eligibility-alert {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 700;
+}
+
+.eligibility-alert.success {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+.eligibility-alert.error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.32);
+}
+
+.eligibility-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.8fr) auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.eligibility-create label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.eligibility-create select {
+  min-height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  color: inherit;
+  padding: 0 12px;
+}
+
+.eligibility-history {
+  overflow: hidden;
+}
+
+.eligibility-table {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.eligibility-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.1fr) minmax(140px, 0.75fr) minmax(160px, 0.8fr) minmax(110px, 0.55fr) minmax(180px, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.eligibility-row > div {
+  display: grid;
+  gap: 4px;
+}
+
+.eligibility-row small {
+  color: var(--v2-muted, #94a3b8);
+  overflow-wrap: anywhere;
+}
+
+.eligibility-state,
+.eligibility-approved {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.eligibility-state.good,
+.eligibility-approved {
+  background: rgba(16, 185, 129, 0.13);
+  color: #86efac;
+}
+
+.eligibility-state.blocked {
+  background: rgba(245, 158, 11, 0.13);
+  color: #fcd34d;
+}
+
+.eligibility-row-actions {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 8px !important;
+  justify-content: flex-end;
+}
+
+.eligibility-row-actions button {
+  min-height: 36px;
+}
+
+@media (max-width: 1100px) {
+  .eligibility-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .eligibility-row-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .eligibility-create,
+  .eligibility-row {
+    grid-template-columns: 1fr;
+  }
+}
