@@ -32,13 +32,17 @@ if ! id site-manager >/dev/null 2>&1; then
   echo "site-manager system user is missing. Run install-host.sh first." >&2
   exit 1
 fi
+if ! id site-manager-runtime >/dev/null 2>&1; then
+  echo "site-manager-runtime group is missing. Run install-host.sh first." >&2
+  exit 1
+fi
 if ! id caddy >/dev/null 2>&1; then
   echo "caddy system user is missing." >&2
   exit 1
 fi
 
 install -d -m 0750 -o site-manager -g site-manager /etc/site-manager/staging
-usermod -a -G site-manager caddy
+usermod -a -G site-manager,site-manager-runtime caddy
 
 ADDRESS="$STAGING_EDGE_HOSTNAME"
 if [[ "$STAGING_EDGE_HTTPS_PORT" != "443" ]]; then
