@@ -12,6 +12,7 @@ import previewRouter from './preview.js';
 import runtimeRouter from './runtime.js';
 import domainsRouter from './domains.js';
 import deploymentsRouter from './deployments.js';
+import parityRouter from './parity.js';
 import { uploadsRoot } from './uploads.js';
 import { getPool } from './db.js';
 
@@ -80,6 +81,7 @@ app.use('/api/v2/builder', websiteMutationLimiter, builderRouter);
 app.use('/api/v2/preview', websiteMutationLimiter, previewRouter);
 app.use('/api/v2/domains', websiteMutationLimiter, domainsRouter);
 app.use('/api/v2/deployments', websiteMutationLimiter, deploymentsRouter);
+app.use('/api/v2/parity', websiteMutationLimiter, parityRouter);
 app.use('/api/v2/admin', websiteMutationLimiter, adminRouter);
 
 if (process.env.NODE_ENV === 'production') {
