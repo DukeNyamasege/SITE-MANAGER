@@ -33,8 +33,5 @@ export async function saveWebsiteLogo({ websiteId, contentType, buffer }) {
   const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
   const absolutePath = path.join(folder, filename);
   await fs.writeFile(absolutePath, buffer, { flag: 'wx', mode: 0o640 });
-
-  const relativePath = `logos/${websiteId}/${filename}`;
-  const base = String(process.env.PUBLIC_APP_URL || process.env.APP_URL || '').trim();
-  return base ? new URL(`/uploads/${relativePath}`, base).toString() : `/uploads/${relativePath}`;
+  return `/uploads/logos/${websiteId}/${filename}`;
 }
