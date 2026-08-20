@@ -59,35 +59,71 @@ The Node service runs without root and is hardened by systemd. It can write only
 
 ## Installation order
 
-The scripts are not executed by CI and Step 8 does not touch a real VPS.
+The scripts are validated by CI for syntax/contracts, but CI never executes them against a host and Step 8 does not touch a real VPS.
+
+GitHub-created script files are invoked explicitly with `bash`, so executable file-mode metadata is not required.
 
 On a new approved Ubuntu/Debian VPS, the intended order is:
 
 ```bash
-sudo ./infra/vps/install-prerequisites-ubuntu.sh
+sudo bash infra/vps/install-prerequisites-ubuntu.sh
 
 sudo SITE_MANAGER_DOMAIN=manager.example.com \
   NNN_PREVIEW_DOMAIN=preview.example.com \
   PLATFORM_SITE_BASE_DOMAIN=sites.example.com \
   CADDY_EMAIL=admin@example.com \
-  ./infra/vps/install-host.sh
+  bash infra/vps/install-host.sh
 
-sudo ./infra/vps/provision-postgres.sh
-sudo ./infra/vps/release-site-manager.sh <approved-site-manager-ref>
+sudo bash infra/vps/provision-postgres.sh
+sudo bash infra/vps/release-site-manager.sh <approved-site-manager-ref>
 ```
 
-At that point Site Manager can run with `VPS_PUBLISH_MODE=plan`. No customer hostname needs to be activated.
+The Site Manager VPS build explicitly sets `VITE_PUBLIC_MAINTENANCE=false`. This does not change the separate Netlify maintenance/deploy gate.
 
-Only at the final `nnn` production cutover:
+At that point Site Manager can run locally on the VPS with `VPS_PUBLISH_MODE=plan`. No customer hostname and no public Caddy cutover is required.
+
+Only at the final approved `nnn` cutover:
 
 ```bash
 sudo NNN_CUTOVER_APPROVED=YES \
-  ./infra/vps/release-nnn.sh <explicitly-approved-nnn-commit>
+  bash infra/vps/release-nnn.sh <explicitly-approved-nnn-commit>
 ```
 
 Do not use `nnn/main` as that argument merely because it is the default branch. Use the exact tested integration commit approved for cutover.
 
-After DNS and the host configuration are deliberately ready, the operator may enable Caddy and eventually change `VPS_PUBLISH_MODE=apply` in `/etc/site-manager/site-manager.env`. Those are separate production decisions.
+## Three separate activation controls
+
+Installing code does not automatically expose or publish customer websites.
+
+### 1. Shared nnn release activation
+
+`NNN_CUTOVER_APPROVED=YES` is required by `release-nnn.sh`.
+
+### 2. Public manager/preview edge activation
+
+Once manager + preview DNS are ready and both releases are installed:
+
+```bash
+sudo EDGE_CUTOVER_APPROVED=YES bash infra/vps/activate-edge.sh
+```
+
+This validates the local manager, validates the installed nnn contract, validates Caddy, restarts Caddy and checks both public HTTPS endpoints.
+
+### 3. Customer publish apply mode
+
+Site Manager remains in safe `plan` mode until separately approved:
+
+```bash
+sudo CUSTOMER_PUBLISH_APPROVED=YES bash infra/vps/set-publish-mode.sh apply
+```
+
+It can be returned to non-publishing mode at any time with:
+
+```bash
+sudo bash infra/vps/set-publish-mode.sh plan
+```
+
+These controls deliberately prevent host installation, nnn installation and customer publishing from collapsing into one irreversible action.
 
 ## Dedicated preview hostname
 
@@ -98,7 +134,7 @@ The base Caddyfile serves `NNN_PREVIEW_DOMAIN` from the same `/srv/site-manager/
 `release-site-manager.sh`:
 
 1. fetches exactly the supplied Git ref,
-2. installs dependencies and builds,
+2. installs dependencies and builds the V2 frontend,
 3. prunes development packages,
 4. writes an immutable release,
 5. applies PostgreSQL migrations from the candidate release,
@@ -121,8 +157,8 @@ The base Caddyfile serves `NNN_PREVIEW_DOMAIN` from the same `/srv/site-manager/
 Manual rollback helpers accept a release directory name:
 
 ```bash
-sudo ./infra/vps/rollback-site-manager.sh <release-name>
-sudo NNN_ROLLBACK_CONFIRMED=YES ./infra/vps/rollback-nnn.sh <release-name>
+sudo bash infra/vps/rollback-site-manager.sh <release-name>
+sudo NNN_ROLLBACK_CONFIRMED=YES bash infra/vps/rollback-nnn.sh <release-name>
 ```
 
 ## Backups
@@ -142,4 +178,5 @@ Default retention is 14 days and can be changed with `SITE_MANAGER_BACKUP_RETENT
 - no per-customer `nnn` repository/build,
 - no automatic merge/deploy from `nnn/main`,
 - no production VPS mutation from GitHub CI,
+- no automatic Caddy cutover,
 - no automatic switch from publishing `plan` to `apply`.
