@@ -67,11 +67,20 @@ jobs:
             node --check "$file"
           done
 
+      - name: Validate VPS shell package syntax
+        run: |
+          while IFS= read -r -d '' file; do
+            bash -n "$file"
+          done < <(find infra/vps -type f -name '*.sh' -print0)
+
       - name: Validate nnn builder contract
         run: node scripts/validate-nnn-contract.mjs
 
       - name: Validate shared nnn publishing contract
         run: node scripts/validate-vps-publishing-contract.mjs
+
+      - name: Validate VPS installation contract
+        run: node scripts/validate-vps-installation.mjs
 
       - name: Apply PostgreSQL migrations
         run: npm run db:migrate
