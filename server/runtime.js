@@ -43,7 +43,7 @@ function cleanHost(value) {
     .replace(/:\d+$/, '');
 }
 
-function shapeRuntime(row, mode, previewExpiresAt = null) {
+function shapeRuntime(row, mode, previewExpiresAt = null, stagingMeta = null) {
   const primaryDomain = cleanHost(row.managed_hostname || row.primary_domain);
   return {
     version: 1,
@@ -89,6 +89,7 @@ function shapeRuntime(row, mode, previewExpiresAt = null) {
       activated_at: row.deployment_activated_at,
     } : null,
     ...(mode === 'preview' ? { preview: { expires_at: previewExpiresAt } } : {}),
+    ...(mode === 'staging' && stagingMeta ? { staging: stagingMeta } : {}),
   };
 }
 
@@ -134,6 +135,39 @@ router.get('/site', async (request, response, next) => {
   try {
     const host = cleanHost(request.query.host);
     if (!host) return response.status(400).json({ message: 'Host is required.' });
+
+    const stagingRunId = String(request.headers['x-site-manager-staging-run'] || '').trim();
+    const stagingToken = String(request.headers['x-site-manager-staging-token'] || '').trim();
+    if (stagingRunId || stagingToken) {
+      if (!stagingRunId || !stagingToken) {
+        return response.status(401).json({ message: 'Incomplete staging runtime credentials.' });
+      }
+      const staging = await query(
+        `${runtimeSelect}
+         JOIN website_staging_edge_runs sr ON sr.website_id = w.id
+         WHERE sr.id = $1
+           AND sr.runtime_token_hash = $2
+           AND sr.runtime_token_expires_at > NOW()
+           AND sr.status IN ('applying', 'monitoring')
+           AND w.status <> 'archived'
+           AND c.configuration_status = 'complete'
+         LIMIT 1`,
+        [stagingRunId, hashToken(stagingToken)],
+      );
+      const row = staging.rows[0];
+      if (!row) return response.status(401).json({ message: 'This staging runtime session is invalid or no longer active.' });
+      const expires = (await query(
+        'SELECT runtime_token_expires_at FROM website_staging_edge_runs WHERE id = $1 LIMIT 1',
+        [stagingRunId],
+      )).rows[0]?.runtime_token_expires_at || null;
+      response.setHeader('Cache-Control', 'no-store, private');
+      return response.json(shapeRuntime(row, 'staging', null, {
+        run_id: stagingRunId,
+        expires_at: expires,
+        requested_host: host,
+        production_traffic_changed: false,
+      }));
+    }
 
     const result = await query(
       `${runtimeSelect}
