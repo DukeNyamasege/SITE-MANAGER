@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { buildCaddySite, buildDeploymentManifest, PUBLISHING_CONTRACT_VERSION } from '../server/vps-publisher.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  buildCaddySite,
+  buildDeploymentManifest,
+  prepareDeploymentFiles,
+  PUBLISHING_CONTRACT_VERSION,
+} from '../server/vps-publisher.js';
 
 assert.equal(PUBLISHING_CONTRACT_VERSION, 2);
 
@@ -29,5 +37,16 @@ assert.match(caddy, /root \* "\/srv\/site-manager\/nnn\/current"/);
 assert.match(caddy, /try_files \{path\} \/index\.html/);
 assert.equal((caddy.match(/\/srv\/site-manager\/nnn\/current/g) || []).length, 1);
 assert.ok(!caddy.includes('demo-site/dist'), 'Publishing must never create a per-customer nnn build path.');
+
+const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'site-manager-publish-'));
+const liveRoutes = path.join(temp, 'live-caddy');
+process.env.VPS_PUBLISH_MODE = 'plan';
+process.env.VPS_DEPLOYMENT_STATE_DIR = path.join(temp, 'state');
+process.env.CADDY_ROUTE_DIR = liveRoutes;
+const prepared = await prepareDeploymentFiles(manifest);
+assert.ok(prepared.routePath.startsWith(path.join(temp, 'state', 'planned-routes')));
+const liveRouteFiles = await fs.readdir(liveRoutes).catch(error => error?.code === 'ENOENT' ? [] : Promise.reject(error));
+assert.deepEqual(liveRouteFiles, [], 'Plan mode must not write any live Caddy route file.');
+await fs.rm(temp, { recursive: true, force: true });
 
 console.log('Shared nnn VPS publishing contract validation passed.');
