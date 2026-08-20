@@ -90,13 +90,29 @@ async function atomicWrite(filepath, contents) {
   await fs.rename(temporary, filepath);
 }
 
+async function readOptional(filepath) {
+  try { return await fs.readFile(filepath, 'utf8'); } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 export async function prepareDeploymentFiles(manifest) {
   const settings = publisherSettings();
   const manifestPath = path.join(settings.stateDir, 'manifests', `${manifest.deployment_id}.json`);
   const routePath = path.join(settings.routeDir, `${manifest.hostname}.caddy`);
+  const previousRoute = await readOptional(routePath);
   await atomicWrite(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await atomicWrite(routePath, buildCaddySite(manifest));
-  return { manifestPath, routePath, settings };
+  return { manifestPath, routePath, previousRoute, settings };
+}
+
+async function restoreRoute(prepared) {
+  if (prepared.previousRoute === null) {
+    await fs.rm(prepared.routePath, { force: true });
+  } else {
+    await atomicWrite(prepared.routePath, prepared.previousRoute);
+  }
 }
 
 async function validateSharedRuntime(settings) {
@@ -104,7 +120,7 @@ async function validateSharedRuntime(settings) {
   const raw = await fs.readFile(contractPath, 'utf8').catch(() => '');
   if (!raw) throw new Error(`Shared nnn runtime contract not found at ${contractPath}. Build nnn before applying deployments.`);
   const contract = JSON.parse(raw);
-  if (Number(contract.contract_version) !== PUBLISHING_CONTRACT_VERSION || contract.runtime !== 'nnn') {
+  if (Number(contract.contract_version) !== PUBLISHING_CONTRACT_VERSION || contract.runtime !== 'nnn' || contract.deployment_model !== 'shared-static-runtime') {
     throw new Error(`Shared nnn runtime contract mismatch. Expected contract ${PUBLISHING_CONTRACT_VERSION}.`);
   }
   return contract;
@@ -124,7 +140,7 @@ export async function healthcheckDeployment(manifest, settings = publisherSettin
       const response = await fetch(manifest.healthcheck_url, { redirect: 'follow', signal: AbortSignal.timeout(7000) });
       if (response.ok) {
         const payload = await response.json();
-        if (payload.runtime === 'nnn' && Number(payload.contract_version) === PUBLISHING_CONTRACT_VERSION) {
+        if (payload.runtime === 'nnn' && Number(payload.contract_version) === PUBLISHING_CONTRACT_VERSION && payload.deployment_model === 'shared-static-runtime') {
           return { ok: true, status: response.status, contract: payload };
         }
         lastMessage = 'The hostname responded, but it was not the expected nnn publishing contract.';
@@ -151,20 +167,26 @@ export async function publishSharedRuntime(manifest) {
     };
   }
 
-  if (!prepared.settings.runtimeRelease || prepared.settings.runtimeRelease === 'nnn-main-unpinned') {
-    throw new Error('NNN_RUNTIME_RELEASE must identify the deployed nnn build before VPS apply mode can publish.');
-  }
-  await validateSharedRuntime(prepared.settings);
-  await reloadCaddy(prepared.settings);
-  const health = await healthcheckDeployment(manifest, prepared.settings);
-  if (!health.ok) throw new Error(`Caddy reloaded but the nnn health check failed: ${health.message}`);
+  try {
+    if (!prepared.settings.runtimeRelease || prepared.settings.runtimeRelease === 'nnn-main-unpinned') {
+      throw new Error('NNN_RUNTIME_RELEASE must identify the deployed nnn build before VPS apply mode can publish.');
+    }
+    await validateSharedRuntime(prepared.settings);
+    await reloadCaddy(prepared.settings);
+    const health = await healthcheckDeployment(manifest, prepared.settings);
+    if (!health.ok) throw new Error(`Caddy reloaded but the nnn health check failed: ${health.message}`);
 
-  return {
-    applied: true,
-    status: 'active',
-    route_path: prepared.routePath,
-    manifest_path: prepared.manifestPath,
-    health,
-    message: 'The hostname is serving the shared nnn runtime over HTTPS.',
-  };
+    return {
+      applied: true,
+      status: 'active',
+      route_path: prepared.routePath,
+      manifest_path: prepared.manifestPath,
+      health,
+      message: 'The hostname is serving the shared nnn runtime over HTTPS.',
+    };
+  } catch (error) {
+    await restoreRoute(prepared).catch(() => {});
+    await reloadCaddy(prepared.settings).catch(() => {});
+    throw error;
+  }
 }
