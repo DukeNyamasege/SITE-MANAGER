@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AppV2 from './AppV2';
 import { AuthProvider, AuthScreen, useAuth } from './auth';
 import { WebsiteBuilderView } from './builder';
+import { CanaryCutoverWorkspace } from './canary';
 import { CutoverOrchestrationWorkspace } from './cutover';
 import { DeploymentsWorkspace } from './deployments';
 import { DomainsWorkspace } from './domains';
@@ -14,7 +15,7 @@ import './customization.css';
 import './netlify-only.css';
 import './v2.css';
 
-type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'current-manager' | 'account';
+type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'canary-cutover' | 'current-manager' | 'account';
 
 const capabilities = [
   'Verified customer accounts and VPS sessions',
@@ -38,8 +39,11 @@ const capabilities = [
   'Fail-closed per-site cutover readiness with stale-evidence detection',
   'Immutable operator cutover plans pinned to exact parity evidence',
   'Cutover arming revalidates source, held nnn, V2 and VPS target state',
-  'Rollback target and rollback-window policy frozen before execution',
-  'Production execution explicitly disabled until the next milestone',
+  'Simulation-only one-site canary execution with a platform-wide concurrency lock',
+  'Rollback timer begins only after held-nnn health criteria pass',
+  'Automatic rollback drill restores the frozen legacy snapshot on canary health failure',
+  'Migrated sites blocked from bypassing cutover through ordinary customer publishing',
+  'Production traffic and production cutover flags database-locked to false during Step 13',
   'nnn production main isolated until explicit final cutover',
   'Payment lifecycle intentionally deferred',
 ];
@@ -77,7 +81,8 @@ function AuthenticatedWorkspace() {
                 : view === 'legacy-migration' ? 'Legacy nnn Migration'
                   : view === 'cutover-readiness' ? 'Cutover Readiness'
                     : view === 'cutover-orchestration' ? 'Cutover Plans'
-                      : 'Site Manager V2';
+                      : view === 'canary-cutover' ? 'Canary Drill'
+                        : 'Site Manager V2';
 
   const websitesActive = ['my-websites', 'builder', 'runtime-preview'].includes(view);
 
@@ -94,6 +99,7 @@ function AuthenticatedWorkspace() {
         <button className={view === 'legacy-migration' ? 'is-active' : ''} type="button" onClick={() => setView('legacy-migration')}>Legacy Migration</button>
         <button className={view === 'cutover-readiness' ? 'is-active' : ''} type="button" onClick={() => setView('cutover-readiness')}>Cutover Readiness</button>
         <button className={view === 'cutover-orchestration' ? 'is-active' : ''} type="button" onClick={() => setView('cutover-orchestration')}>Cutover Plans</button>
+        <button className={view === 'canary-cutover' ? 'is-active' : ''} type="button" onClick={() => setView('canary-cutover')}>Canary Drill</button>
         <button className={view === 'account' ? 'is-active' : ''} type="button" onClick={() => setView('account')}>Account</button>
       </nav>
       <div className="v2-sidebar-footer"><span className="v2-status-dot" />Netlify deployment paused</div>
@@ -102,7 +108,7 @@ function AuthenticatedWorkspace() {
     <main className="v2-main">
       <header className="v2-topbar"><div><p>DEVELOPMENT WORKSPACE</p><h1>{pageTitle}</h1></div><div className="v2-account-chip"><div><strong>{user.display_name || 'Site Manager customer'}</strong><small>{user.email}</small></div><button type="button" onClick={() => void logout()}>Sign out</button></div></header>
       {view === 'account' && <AccountView />}
-      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} />}
+      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} onOpenCanary={() => setView('canary-cutover')} />}
       {view === 'my-websites' && <MyWebsitesView onCreateWebsite={() => setView('create-website')} onContinueSetup={openBuilder} onPreviewWebsite={openPreview} onManageDomains={openDomains} />}
       {view === 'create-website' && <CreateWebsiteView onCreated={openBuilder} onCancel={() => setView('my-websites')} />}
       {view === 'builder' && builderWebsiteId && <WebsiteBuilderView websiteId={builderWebsiteId} onBack={() => setView('my-websites')} onCompleted={() => setView('my-websites')} />}
@@ -112,6 +118,7 @@ function AuthenticatedWorkspace() {
       {view === 'legacy-migration' && <LegacyMigrationWorkspace />}
       {view === 'cutover-readiness' && <CutoverReadinessWorkspace />}
       {view === 'cutover-orchestration' && <CutoverOrchestrationWorkspace />}
+      {view === 'canary-cutover' && <CanaryCutoverWorkspace />}
     </main>
   </div>;
 }
@@ -120,25 +127,25 @@ function AccountView() {
   const { user } = useAuth();
   if (!user) return null;
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 12 · CONTROLLED CUTOVER ORCHESTRATION</p><h2>Parity-ready sites can now be frozen into immutable operator plans without moving production traffic.</h2><p>Each plan records the exact live-source fingerprint, held nnn release, V2 fingerprint, primary hostname, callback, runtime health contract and legacy rollback target. Any later drift invalidates the plan instead of mutating it.</p></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 13 · CANARY CUTOVER & ROLLBACK DRILL</p><h2>An armed migrated site can now exercise the complete activation/health/rollback state machine without moving production traffic.</h2><p>Step 13 uses an isolated simulation adapter and the exact held nnn build. Only one canary may be active platform-wide, health must pass before the rollback clock begins, and a failed health drill automatically restores the frozen legacy snapshot.</p></div></section>
     <section className="v2-grid">
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EMAIL</span><h3>{user.email}</h3></div><span className="v2-state good">VERIFIED</span></div><p>Email verification protects the customer control plane.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CUTOVER</span><h3>Plan → arm</h3></div><span className="v2-state good">FAIL CLOSED</span></div><p>Arming requires current parity, the exact held nnn contract and a configured VPS target. It still cannot execute traffic cutover.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in migration, parity or cutover planning.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CANARY</span><h3>Simulation only</h3></div><span className="v2-state good">ISOLATED</span></div><p>There is no live/apply canary mode in Step 13 and migrated sites cannot bypass this gate through ordinary publishing.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in migration or cutover rehearsal.</p></article>
     </section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Canary cutover execution and rollback drill</h2><span>Step 13 will introduce the separate execution contract: one explicitly selected parity-ready, armed site at a time, post-cutover health verification and an immediate rollback path if the shared nnn runtime is unhealthy.</span></div><div className="v2-step-number">13</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Real staging-host execution adapter and cutover monitor</h2><span>Step 14 will take a passed Step 13 canary artifact and add the real staging-host routing/health adapter, post-activation monitoring and rollback mechanics needed before any production customer hostname can be considered.</span></div><div className="v2-step-number">14</div></section>
   </>;
 }
 
-function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity, onOpenCutover }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void; onOpenCutover: () => void }) {
+function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity, onOpenCutover, onOpenCanary }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void; onOpenCutover: () => void; onOpenCanary: () => void }) {
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 12 · CONTROLLED CUTOVER ORCHESTRATION</p><h2>Production migration now has an immutable operator planning layer between parity and traffic movement.</h2><p>A cutover plan can only be prepared from current Step 11 parity-ready evidence. It pins the exact stable-live source, held nnn release, V2 state and rollback target, then rechecks those values before arming. No Step 12 action can execute production cutover.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 13 · CANARY CUTOVER EXECUTION + AUTOMATIC ROLLBACK DRILL</p><h2>The production cutover state machine can now be exercised one site at a time without touching production.</h2><p>The simulation controller consumes only a current ARMED immutable plan, validates the exact held nnn canary contract, activates isolated route state, verifies site/runtime evidence and automatically restores the frozen legacy target when health fails. Production traffic remains database-locked.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenCanary}>Open canary drill</button><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
     <section className="v2-grid">
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PLAN</span><h3>Immutable evidence</h3></div><span className="v2-state good">PINNED</span></div><p>Source SHA/fingerprint, held runtime SHA, V2 fingerprint, primary hostname, parity report and rollback target cannot be edited after plan creation.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">ARM</span><h3>Revalidate first</h3></div><span className="v2-state good">CURRENT ONLY</span></div><p>Source drift, V2 edits, held-runtime changes, expiry or a missing VPS target invalidate or block the plan.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Execution disabled</h3></div><span className="v2-state good">LOCKED</span></div><p>Step 12 exposes no traffic-moving implementation. The database continues to constrain production_cutover_performed to false.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CANARY</span><h3>One at a time</h3></div><span className="v2-state good">GLOBAL LOCK</span></div><p>A PostgreSQL partial unique index prevents two activating/monitoring canaries from coexisting.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">HEALTH</span><h3>Exact held nnn</h3></div><span className="v2-state good">CONTRACT v1</span></div><p>Publishing, cutover, canary, site identity, hostname and held-runtime SHA checks must pass before monitoring begins.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Still unchanged</h3></div><span className="v2-state good">LOCKED</span></div><p>Canary records are simulation-only and cannot represent production traffic movement or a production deployment.</p></article>
     </section>
     <section className="v2-section"><div className="v2-section-heading"><div><p>FOUNDATION</p><h2>What is working now</h2></div></div><div className="v2-capability-grid">{capabilities.map(item => <div className="v2-capability" key={item}><span>✓</span><strong>{item}</strong></div>)}</div></section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Canary cutover execution and rollback drill</h2><span>Step 13 will add the separate operator execution boundary, post-cutover nnn health verification, single-site canary sequencing and rollback activation without enabling broad multi-site migration at once.</span></div><div className="v2-step-number">13</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Real staging-host execution adapter and cutover monitor</h2><span>Step 14 will convert the proven state machine into a real staging-host adapter with actual reverse-proxy health verification and rollback monitoring, still before any production customer cutover.</span></div><div className="v2-step-number">14</div></section>
   </>;
 }
