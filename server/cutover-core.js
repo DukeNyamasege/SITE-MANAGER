@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 export const CUTOVER_CONTRACT_VERSION = 1;
 export const CUTOVER_PLAN_VERSION = 1;
 export const CANARY_CONTRACT_VERSION = 1;
+export const STAGING_EDGE_CONTRACT_VERSION = 1;
 
 const sha256 = value => crypto.createHash('sha256').update(String(value)).digest('hex');
 const cleanHost = value => String(value || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
@@ -60,6 +61,8 @@ export function buildCutoverSnapshot({ context, parity, rollbackWindowMinutes, c
     cutover_contract_compatible: runtimeEvidence.cutover_contract_compatible === true,
     canary_contract_version: Number(runtimeEvidence.canary_contract_version || 0),
     canary_contract_compatible: runtimeEvidence.canary_contract_compatible === true,
+    staging_edge_contract_version: Number(runtimeEvidence.staging_edge_contract_version || 0),
+    staging_edge_contract_compatible: runtimeEvidence.staging_edge_contract_compatible === true,
     runtime_evidence: runtimeEvidence,
     health_resource: '/site-manager-runtime.json',
     planned_health_url: hostname ? `https://${hostname}/site-manager-runtime.json` : '',
@@ -85,6 +88,7 @@ export function buildCutoverSnapshot({ context, parity, rollbackWindowMinutes, c
     source_current: parity.checks.source_not_drifted === true && parity.checks.runtime_evidence_current === true,
     template_cutover_contract_ready: runtimeEvidence.cutover_contract_compatible === true,
     template_canary_contract_ready: runtimeEvidence.canary_contract_compatible === true,
+    template_staging_edge_contract_ready: runtimeEvidence.staging_edge_contract_compatible === true,
     primary_hostname: hostname,
     routing_target: settings.routingTarget,
     routing_target_configured: hasRoutingTarget(settings.routingTarget),
@@ -140,6 +144,8 @@ export function evaluateCutoverPlan({ plan, parity }) {
       && runtimeEvidence.cutover_contract_compatible === true,
     canary_contract_current: Number(runtimeEvidence.canary_contract_version || 0) === CANARY_CONTRACT_VERSION
       && runtimeEvidence.canary_contract_compatible === true,
+    staging_edge_contract_current: Number(runtimeEvidence.staging_edge_contract_version || 0) === STAGING_EDGE_CONTRACT_VERSION
+      && runtimeEvidence.staging_edge_contract_compatible === true,
     routing_target_configured: plan.preflight_snapshot?.routing_target_configured === true,
     plan_not_expired: !expired,
     production_still_legacy: parity.checks?.production_still_on_legacy === true,
@@ -152,6 +158,7 @@ export function evaluateCutoverPlan({ plan, parity }) {
     blockers,
     execution_enabled: false,
     canary_simulation_eligible: blockers.length === 0 && plan.status === 'armed',
+    staging_edge_eligible: blockers.length === 0 && plan.status === 'armed',
     production_cutover_performed: false,
   };
 }
