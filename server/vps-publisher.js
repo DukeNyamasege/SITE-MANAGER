@@ -97,6 +97,13 @@ async function readOptional(filepath) {
   }
 }
 
+function managedRoutePath(filepath, settings) {
+  const resolved = path.resolve(filepath);
+  const root = `${settings.routeDir}${path.sep}`;
+  if (!resolved.startsWith(root)) throw new Error('Refusing to modify a Caddy route outside Site Manager route storage.');
+  return resolved;
+}
+
 export async function prepareDeploymentFiles(manifest) {
   const settings = publisherSettings();
   const manifestPath = path.join(settings.stateDir, 'manifests', `${manifest.deployment_id}.json`);
@@ -113,6 +120,24 @@ async function restoreRoute(prepared) {
   } else {
     await atomicWrite(prepared.routePath, prepared.previousRoute);
   }
+}
+
+async function retireRoutes(routePaths, prepared) {
+  const retired = [];
+  for (const value of [...new Set(routePaths || [])]) {
+    if (!value) continue;
+    const filepath = managedRoutePath(value, prepared.settings);
+    if (filepath === path.resolve(prepared.routePath)) continue;
+    const contents = await readOptional(filepath);
+    if (contents === null) continue;
+    retired.push({ filepath, contents });
+    await fs.rm(filepath, { force: true });
+  }
+  return retired;
+}
+
+async function restoreRetiredRoutes(retired) {
+  for (const item of retired) await atomicWrite(item.filepath, item.contents);
 }
 
 async function validateSharedRuntime(settings) {
@@ -155,7 +180,7 @@ export async function healthcheckDeployment(manifest, settings = publisherSettin
   return { ok: false, message: lastMessage || 'Deployment health check failed.' };
 }
 
-export async function publishSharedRuntime(manifest) {
+export async function publishSharedRuntime(manifest, { retireRoutePaths = [] } = {}) {
   const prepared = await prepareDeploymentFiles(manifest);
   if (prepared.settings.mode !== 'apply') {
     return {
@@ -167,11 +192,13 @@ export async function publishSharedRuntime(manifest) {
     };
   }
 
+  let retired = [];
   try {
     if (!prepared.settings.runtimeRelease || prepared.settings.runtimeRelease === 'nnn-main-unpinned') {
       throw new Error('NNN_RUNTIME_RELEASE must identify the deployed nnn build before VPS apply mode can publish.');
     }
     await validateSharedRuntime(prepared.settings);
+    retired = await retireRoutes(retireRoutePaths, prepared);
     await reloadCaddy(prepared.settings);
     const health = await healthcheckDeployment(manifest, prepared.settings);
     if (!health.ok) throw new Error(`Caddy reloaded but the nnn health check failed: ${health.message}`);
@@ -181,11 +208,13 @@ export async function publishSharedRuntime(manifest) {
       status: 'active',
       route_path: prepared.routePath,
       manifest_path: prepared.manifestPath,
+      retired_routes: retired.map(item => item.filepath),
       health,
       message: 'The hostname is serving the shared nnn runtime over HTTPS.',
     };
   } catch (error) {
     await restoreRoute(prepared).catch(() => {});
+    await restoreRetiredRoutes(retired).catch(() => {});
     await reloadCaddy(prepared.settings).catch(() => {});
     throw error;
   }
