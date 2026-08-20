@@ -126,6 +126,7 @@ export function evaluateCutoverPlan({ plan, parity }) {
   const runtimeEvidence = parity.runtime?.evidence || {};
   const expired = new Date(plan.expires_at).getTime() <= Date.now();
   const comparisons = {
+    plan_actionable: ['prepared', 'armed'].includes(plan.status),
     parity_ready: parity.cutover_ready === true,
     source_commit_current: plan.legacy_source_commit === parity.source.commit,
     source_fingerprint_current: plan.legacy_source_fingerprint === parity.source.fingerprint,
