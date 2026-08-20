@@ -329,6 +329,9 @@ router.post('/:websiteId/prepare', async (request, response, next) => {
       rollbackWindowMinutes: request.body?.rollback_window_minutes,
     });
     if (!snapshot.primaryHostname) return response.status(409).json({ message: 'A primary hostname is required before creating a cutover plan.' });
+    if (!snapshot.preflightSnapshot.routing_target_configured) {
+      return response.status(409).json({ message: 'A VPS routing target must be configured before creating a cutover plan.' });
+    }
 
     const created = await transaction(async client => {
       const result = await client.query(
@@ -373,9 +376,7 @@ router.post('/:websiteId/prepare', async (request, response, next) => {
       ok: true,
       plan: shapePlan(created, evaluation, await planEvents(created.id)),
       execution_enabled: false,
-      message: evaluation.current
-        ? 'Immutable cutover plan prepared. An administrator may arm it, but Step 12 still cannot move production traffic.'
-        : 'Cutover plan prepared with preflight blockers. Resolve them and create a fresh plan before arming.',
+      message: 'Immutable cutover plan prepared. An administrator may arm it, but Step 12 still cannot move production traffic.',
     });
   } catch (error) {
     if (error?.code === '23505') return response.status(409).json({ message: 'An open or identical cutover plan already exists.' });
