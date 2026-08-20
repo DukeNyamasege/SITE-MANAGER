@@ -69,7 +69,15 @@ function statusLabel(value: string) {
   return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
 }
 
-export function MyWebsitesView({ onCreateWebsite, onContinueSetup }: { onCreateWebsite: () => void; onContinueSetup: (website: WebsiteRecord) => void }) {
+export function MyWebsitesView({
+  onCreateWebsite,
+  onContinueSetup,
+  onPreviewWebsite,
+}: {
+  onCreateWebsite: () => void;
+  onContinueSetup: (website: WebsiteRecord) => void;
+  onPreviewWebsite: (website: WebsiteRecord) => void;
+}) {
   const [websites, setWebsites] = useState<WebsiteRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -156,7 +164,7 @@ export function MyWebsitesView({ onCreateWebsite, onContinueSetup }: { onCreateW
           <div className="websites-empty-icon">＋</div>
           <p>NO WEBSITES YET</p>
           <h3>Start with nothing. Build your first website here.</h3>
-          <span>You do not need a domain first. Create a private draft, then Site Manager opens the nnn configuration builder.</span>
+          <span>You do not need a domain first. Create a private draft, configure the nnn template, then inspect the real runtime before deployment.</span>
           <button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create your first website</button>
         </section>
       ) : (
@@ -194,6 +202,7 @@ export function MyWebsitesView({ onCreateWebsite, onContinueSetup }: { onCreateW
               <div className="website-actions">
                 <button type="button" onClick={() => { setRenamingId(website.id); setRenameValue(website.name); }}>Rename</button>
                 <button type="button" disabled={busyId === website.id} onClick={() => void archive(website)}>Archive</button>
+                <button type="button" onClick={() => onPreviewWebsite(website)}>Preview & assets</button>
                 <button className="primary" type="button" onClick={() => onContinueSetup(website)}>{website.status === 'ready' ? 'Edit setup' : 'Continue setup'}</button>
               </div>
             </article>

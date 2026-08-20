@@ -7,6 +7,9 @@ import { rateLimit } from 'express-rate-limit';
 import authRouter from './auth.js';
 import websitesRouter from './websites.js';
 import builderRouter from './builder.js';
+import previewRouter from './preview.js';
+import runtimeRouter from './runtime.js';
+import { uploadsRoot } from './uploads.js';
 import { getPool } from './db.js';
 
 const app = express();
@@ -59,6 +62,9 @@ app.get('/api/v2/health', async (_request, response, next) => {
   }
 });
 
+app.use('/uploads', express.static(uploadsRoot, { maxAge: '1h', immutable: false, fallthrough: false }));
+app.use('/api/v2/runtime', runtimeRouter);
+
 app.use('/api/v2/auth', authLimiter);
 app.use('/api/v2/auth/login', sensitiveLimiter);
 app.use('/api/v2/auth/register', sensitiveLimiter);
@@ -68,6 +74,7 @@ app.use('/api/v2/auth', authRouter);
 
 app.use('/api/v2/websites', websiteMutationLimiter, websitesRouter);
 app.use('/api/v2/builder', websiteMutationLimiter, builderRouter);
+app.use('/api/v2/preview', websiteMutationLimiter, previewRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
