@@ -20,7 +20,7 @@ esac
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y ca-certificates curl gnupg git rsync jq openssl postgresql postgresql-client
-install -d -m 0755 /etc/apt/keyrings
+install -d -m 0755 /etc/apt/keyrings /usr/share/keyrings
 
 need_node=1
 if command -v node >/dev/null 2>&1; then
@@ -40,10 +40,11 @@ fi
 
 if ! command -v caddy >/dev/null 2>&1; then
   curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
-    | gpg --dearmor --yes -o /etc/apt/keyrings/caddy-stable.gpg
-  chmod 0644 /etc/apt/keyrings/caddy-stable.gpg
+    | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  chmod 0644 /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
     -o /etc/apt/sources.list.d/caddy-stable.list
+  chmod 0644 /etc/apt/sources.list.d/caddy-stable.list
   apt-get update
   apt-get install -y caddy
 fi
