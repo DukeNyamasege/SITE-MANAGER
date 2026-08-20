@@ -20,9 +20,11 @@ if [[ ! "$DB_PASSWORD" =~ ^[A-Za-z0-9._~-]{24,128}$ ]]; then
   echo "DB_PASSWORD must contain only URL-safe characters and be at least 24 characters." >&2
   exit 1
 fi
+command -v openssl >/dev/null 2>&1 || { echo "openssl is required." >&2; exit 1; }
+command -v runuser >/dev/null 2>&1 || { echo "runuser is required." >&2; exit 1; }
 
 systemctl start postgresql
-sudo -u postgres psql --set=ON_ERROR_STOP=1 \
+runuser -u postgres -- psql --set=ON_ERROR_STOP=1 \
   --set=role="$DB_USER" --set=pass="$DB_PASSWORD" --set=db="$DB_NAME" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pass')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role') \gexec
