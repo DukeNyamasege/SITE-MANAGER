@@ -6,7 +6,7 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   exit 1
 fi
 if [[ $# -ne 1 ]]; then
-  echo "Usage: NNN_CUTOVER_APPROVED=YES $0 <approved-git-ref-or-commit>" >&2
+  echo "Usage: NNN_CUTOVER_APPROVED=YES bash $0 <approved-git-ref-or-commit>" >&2
   exit 1
 fi
 if [[ "${NNN_CUTOVER_APPROVED:-NO}" != "YES" ]]; then
@@ -92,12 +92,16 @@ rollback() {
     local back="$ROOT/nnn/.rollback-$$"
     ln -s "$PREVIOUS" "$back"
     mv -Tf "$back" "$CURRENT"
+  else
+    rm -f "$CURRENT"
   fi
   if [[ -n "$PREVIOUS_RUNTIME_ENV" ]]; then
     printf '%s\n' "$PREVIOUS_RUNTIME_ENV" >/etc/site-manager/runtime.env
-    chown root:site-manager /etc/site-manager/runtime.env
-    chmod 0640 /etc/site-manager/runtime.env
+  else
+    printf 'NNN_RUNTIME_RELEASE=nnn-main-unpinned\n' >/etc/site-manager/runtime.env
   fi
+  chown root:site-manager /etc/site-manager/runtime.env
+  chmod 0640 /etc/site-manager/runtime.env
   systemctl restart site-manager.service || true
 }
 
