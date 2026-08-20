@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import authRouter from './auth.js';
 import websitesRouter from './websites.js';
+import builderRouter from './builder.js';
 import { getPool } from './db.js';
 
 const app = express();
@@ -66,6 +67,7 @@ app.use('/api/v2/auth/reset-password', sensitiveLimiter);
 app.use('/api/v2/auth', authRouter);
 
 app.use('/api/v2/websites', websiteMutationLimiter, websitesRouter);
+app.use('/api/v2/builder', websiteMutationLimiter, builderRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
