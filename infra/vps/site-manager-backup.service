@@ -1,0 +1,11 @@
+[Unit]
+Description=Site Manager PostgreSQL and upload backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=site-manager
+Group=site-manager
+EnvironmentFile=/etc/site-manager/site-manager.env
+ExecStart=/srv/site-manager/manager/current/infra/vps/backup-state.sh
+UMask=0077
