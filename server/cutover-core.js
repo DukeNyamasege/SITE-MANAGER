@@ -14,7 +14,7 @@ export function cutoverSettings() {
     executionEnabled: false,
     routingTarget: {
       ipv4: String(process.env.VPS_PUBLIC_IPV4 || '').split(',').map(item => item.trim()).filter(Boolean),
-      ipv6: String(process.env.VPS_PUBLIC_IPV6 || '').split(',').map(item => item.trim()).filter(Boolean),
+      ipv6: String(process.env.VPS_PUBLIC_IPV6 || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean),
       cname: cleanHost(process.env.VPS_CNAME_TARGET || ''),
     },
   };
@@ -133,6 +133,7 @@ export function evaluateCutoverPlan({ plan, parity }) {
     v2_fingerprint_current: plan.v2_fingerprint === parity.v2_fingerprint,
     cutover_contract_current: Number(runtimeEvidence.cutover_contract_version || 0) === CUTOVER_CONTRACT_VERSION
       && runtimeEvidence.cutover_contract_compatible === true,
+    routing_target_configured: plan.preflight_snapshot?.routing_target_configured === true,
     plan_not_expired: !expired,
     production_still_legacy: parity.checks?.production_still_on_legacy === true,
   };
