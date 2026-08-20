@@ -69,7 +69,7 @@ function statusLabel(value: string) {
   return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
 }
 
-export function MyWebsitesView({ onCreateWebsite }: { onCreateWebsite: () => void }) {
+export function MyWebsitesView({ onCreateWebsite, onContinueSetup }: { onCreateWebsite: () => void; onContinueSetup: (website: WebsiteRecord) => void }) {
   const [websites, setWebsites] = useState<WebsiteRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -156,7 +156,7 @@ export function MyWebsitesView({ onCreateWebsite }: { onCreateWebsite: () => voi
           <div className="websites-empty-icon">＋</div>
           <p>NO WEBSITES YET</p>
           <h3>Start with nothing. Build your first website here.</h3>
-          <span>You do not need a domain first. Step 4 will guide this draft through the `nnn` template, configuration, preview, domain and deployment flow.</span>
+          <span>You do not need a domain first. Create a private draft, then Site Manager opens the nnn configuration builder.</span>
           <button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create your first website</button>
         </section>
       ) : (
@@ -194,7 +194,7 @@ export function MyWebsitesView({ onCreateWebsite }: { onCreateWebsite: () => voi
               <div className="website-actions">
                 <button type="button" onClick={() => { setRenamingId(website.id); setRenameValue(website.name); }}>Rename</button>
                 <button type="button" disabled={busyId === website.id} onClick={() => void archive(website)}>Archive</button>
-                <button className="primary" type="button" disabled title="Step 4 will activate the website builder">Continue setup</button>
+                <button className="primary" type="button" onClick={() => onContinueSetup(website)}>{website.status === 'ready' ? 'Edit setup' : 'Continue setup'}</button>
               </div>
             </article>
           ))}
@@ -228,11 +228,11 @@ export function CreateWebsiteView({ onCreated, onCancel }: { onCreated: (website
   return (
     <div className="website-create-page">
       <section className="website-create-card">
-        <p className="v2-kicker">CREATE WEBSITE · FOUNDATION</p>
+        <p className="v2-kicker">CREATE WEBSITE · START</p>
         <h2>Give your website a working name.</h2>
         <p>
-          No domain is required. This creates a private draft owned by your account and reserves its stable Site Manager key.
-          In Step 4, the full builder will configure the `nnn` template and take this draft toward deployment.
+          No domain is required. Site Manager creates a private website owned by your account, reserves a stable site key,
+          and then opens the five-step `nnn` template builder.
         </p>
 
         <form onSubmit={submit}>
@@ -249,7 +249,7 @@ export function CreateWebsiteView({ onCreated, onCancel }: { onCreated: (website
           {error && <div className="websites-alert error">{error}</div>}
           <div className="website-create-actions">
             <button type="button" onClick={onCancel}>Cancel</button>
-            <button className="v2-primary-button" type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create draft website'}</button>
+            <button className="v2-primary-button" type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create & configure website'}</button>
           </div>
         </form>
       </section>
