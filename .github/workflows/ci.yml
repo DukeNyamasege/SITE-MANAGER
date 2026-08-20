@@ -38,6 +38,10 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/site_manager_test
       DATABASE_SSL: "false"
+      VPS_PUBLISH_MODE: plan
+      NNN_RUNTIME_RELEASE: nnn-ci-test
+      NNN_SHARED_DIST_DIR: /srv/site-manager/nnn/current
+      SITE_MANAGER_API_UPSTREAM: http://127.0.0.1:8787
 
     steps:
       - name: Check out repository
@@ -66,11 +70,17 @@ jobs:
       - name: Validate nnn builder contract
         run: node scripts/validate-nnn-contract.mjs
 
+      - name: Validate shared nnn publishing contract
+        run: node scripts/validate-vps-publishing-contract.mjs
+
       - name: Apply PostgreSQL migrations
         run: npm run db:migrate
 
       - name: Validate VPS domain readiness schema
         run: node scripts/validate-domain-schema.mjs
+
+      - name: Validate VPS publishing schema
+        run: node scripts/validate-vps-publishing-schema.mjs
 
       - name: Build production bundle
         run: npm run build
