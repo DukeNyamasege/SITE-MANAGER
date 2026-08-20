@@ -14,6 +14,8 @@ type ParityListWebsite = {
   drift_status: string;
   source_commit: string;
   source_fingerprint: string;
+  parity_status: string;
+  cutover_ready: boolean;
   stored_parity_status: string;
   checked_at: string | null;
 };
@@ -138,8 +140,8 @@ export function CutoverReadinessWorkspace() {
 
   const counts = useMemo(() => ({
     migrated: websites.length,
-    ready: websites.filter(site => site.stored_parity_status === 'parity_ready').length,
-    stale: websites.filter(site => site.stored_parity_status === 'stale' || site.drift_status === 'drifted').length,
+    ready: websites.filter(site => site.parity_status === 'parity_ready').length,
+    stale: websites.filter(site => site.parity_status === 'stale' || site.drift_status === 'drifted').length,
   }), [websites]);
 
   if (loading) return <section className="parity-loading">Loading dual-run readiness…</section>;
@@ -158,7 +160,7 @@ export function CutoverReadinessWorkspace() {
 
     <section className="v2-grid">
       <article className="v2-card"><span className="v2-card-label">MIGRATED</span><h3>{counts.migrated}</h3><p>Customer-owned V2 shadows linked to the controlled legacy inventory.</p></article>
-      <article className="v2-card"><span className="v2-card-label">PARITY READY</span><h3>{counts.ready}</h3><p>Latest stored runtime audit passed every required Step 11 check.</p></article>
+      <article className="v2-card"><span className="v2-card-label">PARITY READY</span><h3>{counts.ready}</h3><p>Current database state still passes the latest exact runtime evidence.</p></article>
       <article className="v2-card"><span className="v2-card-label">STALE / DRIFTED</span><h3>{counts.stale}</h3><p>Live source or held-runtime evidence changed and must be audited again.</p></article>
     </section>
 
@@ -169,13 +171,13 @@ export function CutoverReadinessWorkspace() {
             {websites.map(site => <option key={site.id} value={site.id}>{site.name} · {site.site_key}</option>)}
           </select>
         </label>
-        <div><span>Stored evidence</span><strong>{statusText(websites.find(site => site.id === selectedId)?.stored_parity_status || 'not_checked')}</strong></div>
+        <div><span>Current readiness</span><strong>{statusText(websites.find(site => site.id === selectedId)?.parity_status || 'not_checked')}</strong></div>
       </section>
 
       {detail && <>
         <section className={`parity-status-card ${detail.parity.cutover_ready ? 'ready' : detail.parity.status === 'stale' ? 'stale' : 'blocked'}`}>
           <div><p>CUTOVER READINESS</p><h2>{detail.parity.cutover_ready ? 'PARITY READY' : detail.parity.status === 'stale' ? 'EVIDENCE STALE' : 'CUTOVER BLOCKED'}</h2><span>{detail.website.primary_domain || detail.website.site_key}</span></div>
-          <div className="parity-status-meta"><span>Live source {shortSha(detail.parity.source.commit)}</span><span>Held runtime {shortSha(detail.parity.runtime.held_commit)}</span><span>Checked {detail.evidence_checked_at ? new Date(detail.evidence_checked_at).toLocaleString() : 'not yet'}</span></div>
+          <div className="parity-status-meta"><span>Live source {shortSha(detail.parity.source.commit)}</span><span>Held runtime {shortSha(detail.parity.runtime.held_commit)}</span><span>Evidence generated {detail.evidence_checked_at ? new Date(detail.evidence_checked_at).toLocaleString() : 'not yet'}</span></div>
         </section>
 
         {detail.parity.blockers.length > 0 && <section className="parity-blockers v2-card">
