@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS website_staging_edge_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  canary_execution_id UUID NOT NULL UNIQUE REFERENCES website_canary_executions(id) ON DELETE RESTRICT,
+  canary_execution_id UUID NOT NULL REFERENCES website_canary_executions(id) ON DELETE RESTRICT,
   plan_id UUID NOT NULL REFERENCES website_cutover_plans(id) ON DELETE RESTRICT,
   website_id UUID NOT NULL REFERENCES websites(id) ON DELETE CASCADE,
   legacy_import_id UUID NOT NULL REFERENCES legacy_nnn_site_imports(id) ON DELETE RESTRICT,
@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS website_staging_edge_runs (
 CREATE UNIQUE INDEX IF NOT EXISTS website_staging_edge_one_active_globally
   ON website_staging_edge_runs ((TRUE))
   WHERE status IN ('applying', 'monitoring');
+CREATE INDEX IF NOT EXISTS website_staging_edge_runs_canary_idx
+  ON website_staging_edge_runs(canary_execution_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS website_staging_edge_runs_website_created_idx
   ON website_staging_edge_runs(website_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS website_staging_edge_runs_status_idx
