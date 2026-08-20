@@ -13,7 +13,11 @@ CADDY_EMAIL="${CADDY_EMAIL:-}"
 CADDY_APPLY="${CADDY_APPLY:-NO}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-valid_host() { [[ "$1" =~ ^(?=.{1,253}$)([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; }
+valid_host() {
+  local value="$1"
+  [[ ${#value} -le 253 ]] || return 1
+  [[ "$value" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]
+}
 for pair in "SITE_MANAGER_DOMAIN:$SITE_MANAGER_DOMAIN" "NNN_PREVIEW_DOMAIN:$NNN_PREVIEW_DOMAIN" "PLATFORM_SITE_BASE_DOMAIN:$PLATFORM_SITE_BASE_DOMAIN"; do
   key="${pair%%:*}"; value="${pair#*:}"
   if [[ -z "$value" ]] || ! valid_host "$value"; then
@@ -100,7 +104,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
-MAIL_FROM=Site Manager <no-reply@${SITE_MANAGER_DOMAIN}>
+MAIL_FROM="Site Manager <no-reply@${SITE_MANAGER_DOMAIN}>"
 GITHUB_TOKEN=
 TARGET_REPO=DukeNyamasege/nnn
 TARGET_BRANCH=main
