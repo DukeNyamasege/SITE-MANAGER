@@ -13,7 +13,7 @@ jobs:
   verify:
     name: Verify Node.js ${{ matrix.node-version }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -57,6 +57,15 @@ jobs:
       - name: Install Site Manager dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Install real staging Caddy dependency
+        run: |
+          if ! command -v caddy >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y caddy
+          fi
+          sudo systemctl stop caddy.service 2>/dev/null || true
+          caddy version
+
       - name: Validate legacy Netlify functions
         run: |
           for file in netlify/functions/*.mjs; do
@@ -84,6 +93,9 @@ jobs:
       - name: Validate VPS installation contract
         run: node scripts/validate-vps-installation.mjs
 
+      - name: Validate Step 14 staging-edge safety contract
+        run: node scripts/validate-staging-edge-contract.mjs
+
       - name: Apply PostgreSQL migrations
         run: npm run db:migrate
 
@@ -92,6 +104,9 @@ jobs:
 
       - name: Validate VPS publishing schema
         run: node scripts/validate-vps-publishing-schema.mjs
+
+      - name: Validate Step 14 staging-edge schema
+        run: node scripts/validate-staging-edge-schema.mjs
 
       - name: Check out pinned production nnn migration source
         uses: actions/checkout@v4
@@ -155,6 +170,33 @@ jobs:
           NNN_CANARY_RELEASE="$NNN_SHA" \
           node scripts/rehearse-canary-cutover.mjs
 
+      - name: Rehearse real Caddy HTTPS staging edge, restart recovery and rollback
+        env:
+          SITE_MANAGER_ENVIRONMENT: staging
+          STAGING_EDGE_MODE: staging
+          STAGING_EDGE_APPROVED: YES
+          STAGING_EDGE_HOSTNAME: step14.localhost
+          STAGING_EDGE_HTTPS_PORT: 18443
+          STAGING_EDGE_TLS_MODE: internal
+          STAGING_EDGE_CADDY_ADMIN: 127.0.0.1:2020
+          STAGING_EDGE_CADDYFILE: ${{ runner.temp }}/step14-caddy-node-${{ matrix.node-version }}/Caddyfile
+          STAGING_EDGE_STATE_DIR: ${{ runner.temp }}/step14-caddy-node-${{ matrix.node-version }}
+          STAGING_CADDY_BIN: /usr/bin/caddy
+          STAGING_EDGE_CURL_BIN: /usr/bin/curl
+          STAGING_EDGE_RESOLVE_IP: 127.0.0.1
+          STAGING_SITE_MANAGER_API_UPSTREAM: http://127.0.0.1:18787
+          STAGING_EDGE_FAILURE_THRESHOLD: 1
+          STAGING_EDGE_MONITOR_INTERVAL_MS: 60000
+          STAGING_EDGE_MIN_OBSERVATION_SECONDS: 0
+          STAGING_EDGE_TOKEN_TTL_MINUTES: 300
+          STAGING_EDGE_DRILL_ALLOW_FAILURE: YES
+          STAGING_EDGE_REHEARSAL_REPORT_PATH: ${{ runner.temp }}/staging-edge-rehearsal-node-${{ matrix.node-version }}.json
+        run: |
+          NNN_SHA="$(git -C .staging/nnn rev-parse HEAD)"
+          NNN_STAGING_DIST_DIR="$PWD/.staging/nnn/dist" \
+          NNN_STAGING_RELEASE="$NNN_SHA" \
+          node scripts/rehearse-staging-edge.mjs
+
       - name: Validate staging rehearsal safety contract
         run: node scripts/validate-staging-rehearsal.mjs
 
@@ -167,16 +209,18 @@ jobs:
           NNN_REHEARSAL_RELEASE="$NNN_SHA" \
           node scripts/rehearse-staging.mjs
 
-      - name: Upload migration, parity, cutover, canary and staging reports
+      - name: Upload migration, parity, cutover, canary, staging-edge and lifecycle reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step13-rehearsal-node-${{ matrix.node-version }}
+          name: step14-rehearsal-node-${{ matrix.node-version }}
           path: |
             ${{ runner.temp }}/legacy-nnn-audit-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/dual-run-parity-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/cutover-orchestration-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/canary-rehearsal-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/canary-simulation-node-${{ matrix.node-version }}
+            ${{ runner.temp }}/staging-edge-rehearsal-node-${{ matrix.node-version }}.json
+            ${{ runner.temp }}/step14-caddy-node-${{ matrix.node-version }}
             ${{ runner.temp }}/site-manager-rehearsals
           if-no-files-found: ignore
