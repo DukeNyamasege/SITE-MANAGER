@@ -85,11 +85,14 @@ async function evidenceForSite(siteId, customizationSource, freeBotManifestPath)
   const canaryContractCompatible = canaryContractVersion === 1;
   const stagingEdgeContractVersion = Number(runtimeContract?.staging_edge_contract_version || 0);
   const stagingEdgeContractCompatible = stagingEdgeContractVersion === 1;
+  const productionEligibilityContractVersion = Number(runtimeContract?.production_eligibility_contract_version || 0);
+  const productionEligibilityContractCompatible = productionEligibilityContractVersion === 1;
   const runtimeContractCompatible = Number(runtimeContract?.contract_version) === 2
     && Number(runtimeContract?.migration_contract_version) === 1
     && cutoverContractCompatible
     && canaryContractCompatible
     && stagingEdgeContractCompatible
+    && productionEligibilityContractCompatible
     && runtimeContract?.runtime === 'nnn'
     && runtimeContract?.deployment_model === 'shared-static-runtime';
 
@@ -105,6 +108,8 @@ async function evidenceForSite(siteId, customizationSource, freeBotManifestPath)
     canary_contract_compatible: canaryContractCompatible,
     staging_edge_contract_version: stagingEdgeContractVersion,
     staging_edge_contract_compatible: stagingEdgeContractCompatible,
+    production_eligibility_contract_version: productionEligibilityContractVersion,
+    production_eligibility_contract_compatible: productionEligibilityContractCompatible,
     bot_asset_checks: assetChecks,
   };
 }
@@ -195,6 +200,7 @@ const report = {
   cutover_contract_version: 1,
   canary_contract_version: 1,
   staging_edge_contract_version: 1,
+  production_eligibility_contract_version: 1,
   assigned_sites: results.length,
   parity_ready: results.filter(item => item.cutover_ready).length,
   blocked: results.filter(item => !item.cutover_ready).length,
