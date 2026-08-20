@@ -10,6 +10,7 @@ import cutoverRouter from './cutover.js';
 import canaryRouter from './canary.js';
 import stagingEdgeRouter from './staging-edge.js';
 import productionEligibilityRouter from './production-eligibility.js';
+import domainOnboardingRouter from './domain-onboarding.js';
 import websitesRouter from './websites.js';
 import builderRouter from './builder.js';
 import previewRouter from './preview.js';
@@ -81,6 +82,7 @@ app.use('/api/v2/auth/forgot-password', sensitiveLimiter);
 app.use('/api/v2/auth/reset-password', sensitiveLimiter);
 app.use('/api/v2/auth', authRouter);
 
+app.use('/api/v2/domain-onboarding', websiteMutationLimiter, domainOnboardingRouter);
 app.use('/api/v2/websites', websiteMutationLimiter, websitesRouter);
 app.use('/api/v2/builder', websiteMutationLimiter, builderRouter);
 app.use('/api/v2/preview', websiteMutationLimiter, previewRouter);
