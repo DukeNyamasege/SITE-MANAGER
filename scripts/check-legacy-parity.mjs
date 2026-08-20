@@ -79,8 +79,11 @@ async function evidenceForSite(siteId, customizationSource, freeBotManifestPath)
   }
 
   const runtimeContract = await optionalJson(path.join(heldDir, 'public', 'site-manager-runtime.json'));
+  const cutoverContractVersion = Number(runtimeContract?.cutover_contract_version || 0);
+  const cutoverContractCompatible = cutoverContractVersion === 1;
   const runtimeContractCompatible = Number(runtimeContract?.contract_version) === 2
     && Number(runtimeContract?.migration_contract_version) === 1
+    && cutoverContractCompatible
     && runtimeContract?.runtime === 'nnn';
 
   return {
@@ -89,6 +92,8 @@ async function evidenceForSite(siteId, customizationSource, freeBotManifestPath)
     free_bot_manifest_match: freeBotManifestMatch,
     free_bot_assets_match: freeBotAssetsMatch,
     runtime_contract_compatible: runtimeContractCompatible,
+    cutover_contract_version: cutoverContractVersion,
+    cutover_contract_compatible: cutoverContractCompatible,
     bot_asset_checks: assetChecks,
   };
 }
@@ -176,6 +181,7 @@ const report = {
   report_version: 1,
   legacy_source_commit: legacySha,
   held_runtime_commit: heldSha,
+  cutover_contract_version: 1,
   assigned_sites: results.length,
   parity_ready: results.filter(item => item.cutover_ready).length,
   blocked: results.filter(item => !item.cutover_ready).length,
