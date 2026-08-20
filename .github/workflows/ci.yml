@@ -99,6 +99,12 @@ jobs:
       - name: Apply PostgreSQL migrations
         run: npm run db:migrate
 
+      - name: Validate domain-first onboarding schema
+        run: node scripts/validate-domain-first-schema.mjs
+
+      - name: Rehearse new-customer domain-first onboarding
+        run: node scripts/rehearse-domain-first-onboarding.mjs | tee ${{ runner.temp }}/domain-first-node-${{ matrix.node-version }}.json
+
       - name: Validate VPS domain readiness schema
         run: node scripts/validate-domain-schema.mjs
 
@@ -219,12 +225,13 @@ jobs:
           NNN_REHEARSAL_RELEASE="$NNN_SHA" \
           node scripts/rehearse-staging.mjs
 
-      - name: Upload migration, parity, cutover, canary, staging-edge, production-eligibility and lifecycle reports
+      - name: Upload domain-first, migration, parity, cutover, canary, staging-edge, production-eligibility and lifecycle reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step15-rehearsal-node-${{ matrix.node-version }}
+          name: site-manager-rehearsal-node-${{ matrix.node-version }}
           path: |
+            ${{ runner.temp }}/domain-first-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/legacy-nnn-audit-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/dual-run-parity-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/cutover-orchestration-node-${{ matrix.node-version }}.json
