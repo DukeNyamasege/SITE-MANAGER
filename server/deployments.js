@@ -127,18 +127,34 @@ router.post('/:websiteId/publish', async (request, response, next) => {
     }
 
     const settings = publisherSettings();
+    const previousActive = await query(
+      `SELECT id, hostname, route_path FROM website_deployments
+        WHERE website_id = $1 AND status = 'active'
+        ORDER BY activated_at DESC NULLS LAST LIMIT 1`,
+      [readiness.website.id],
+    );
+    const previous = previousActive.rows[0] || null;
+
     const inserted = await transaction(async client => {
       const created = await client.query(
         `INSERT INTO website_deployments
            (website_id, requested_by_user_id, hostname, runtime_name, runtime_release, contract_version, publish_mode, status)
-         VALUES ($1, $2, $3, 'nnn', $4, $5, $6, 'preparing')
+         VALUES ($1, $2, $3, 'nnn', $4, $5, $6, $7)
          RETURNING *`,
-        [readiness.website.id, request.authUser.id, readiness.primary_domain.hostname, settings.runtimeRelease, PUBLISHING_CONTRACT_VERSION, settings.mode],
+        [
+          readiness.website.id,
+          request.authUser.id,
+          readiness.primary_domain.hostname,
+          settings.runtimeRelease,
+          PUBLISHING_CONTRACT_VERSION,
+          settings.mode,
+          settings.mode === 'apply' ? 'activating' : 'preparing',
+        ],
       );
       await client.query(
-        `UPDATE websites SET deployment_status = 'queued', updated_at = NOW()
-          WHERE id = $1 AND owner_user_id = $2`,
-        [readiness.website.id, request.authUser.id],
+        `UPDATE websites SET deployment_status = $1, status = CASE WHEN $1 = 'deploying' THEN 'deploying' ELSE status END, updated_at = NOW()
+          WHERE id = $2 AND owner_user_id = $3`,
+        [settings.mode === 'apply' ? 'deploying' : 'queued', readiness.website.id, request.authUser.id],
       );
       return created.rows[0];
     });
@@ -161,7 +177,10 @@ router.post('/:websiteId/publish', async (request, response, next) => {
       [JSON.stringify(manifest), manifest.healthcheck_url, deploymentId],
     );
 
-    const result = await publishSharedRuntime(manifest);
+    const retireRoutePaths = previous?.route_path && previous.hostname !== readiness.primary_domain.hostname
+      ? [previous.route_path]
+      : [];
+    const result = await publishSharedRuntime(manifest, { retireRoutePaths });
     if (!result.applied) {
       await transaction(async client => {
         await client.query(
@@ -171,16 +190,15 @@ router.post('/:websiteId/publish', async (request, response, next) => {
           [result.route_path, deploymentId],
         );
         await client.query(
-          `UPDATE websites SET deployment_status = 'queued', status = CASE WHEN status = 'deploying' THEN 'ready' ELSE status END, updated_at = NOW()
-            WHERE id = $1`,
-          [readiness.website.id],
+          `UPDATE websites SET deployment_status = $1, status = $2, updated_at = NOW() WHERE id = $3`,
+          [previous ? 'deployed' : 'queued', previous ? 'live' : readiness.website.status, readiness.website.id],
         );
       });
       return response.status(201).json({
         message: result.message,
         deployment: shapeDeployment((await query('SELECT * FROM website_deployments WHERE id = $1', [deploymentId])).rows[0]),
         readiness,
-        live: false,
+        live: Boolean(previous),
       });
     }
 
@@ -221,11 +239,19 @@ router.post('/:websiteId/publish', async (request, response, next) => {
         `UPDATE website_deployments SET status = 'failed', failure_message = $1, updated_at = NOW() WHERE id = $2`,
         [String(error?.message || error), deploymentId],
       ).catch(() => {});
-      await query(
-        `UPDATE websites w SET deployment_status = 'failed', status = CASE WHEN status = 'deploying' THEN 'ready' ELSE status END, updated_at = NOW()
-          FROM website_deployments d WHERE d.id = $1 AND w.id = d.website_id`,
-        [deploymentId],
-      ).catch(() => {});
+      await transaction(async client => {
+        const current = await client.query('SELECT website_id FROM website_deployments WHERE id = $1', [deploymentId]);
+        const websiteId = current.rows[0]?.website_id;
+        if (!websiteId) return;
+        const active = await client.query(
+          `SELECT id FROM website_deployments WHERE website_id = $1 AND status = 'active' AND id <> $2 LIMIT 1`,
+          [websiteId, deploymentId],
+        );
+        await client.query(
+          `UPDATE websites SET deployment_status = $1, status = $2, updated_at = NOW() WHERE id = $3`,
+          [active.rows[0] ? 'deployed' : 'failed', active.rows[0] ? 'live' : 'ready', websiteId],
+        );
+      }).catch(() => {});
     }
     return next(error);
   }
