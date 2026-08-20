@@ -8,6 +8,7 @@ import { DeploymentsWorkspace } from './deployments';
 import { DomainsWorkspace } from './domains';
 import { LegacyMigrationWorkspace } from './legacy-migration';
 import { CutoverReadinessWorkspace } from './parity';
+import { ProductionEligibilityWorkspace } from './production-eligibility';
 import { RuntimePreviewView } from './runtime-preview';
 import { StagingEdgeWorkspace } from './staging-edge';
 import { CreateWebsiteView, MyWebsitesView, type WebsiteRecord } from './websites';
@@ -16,7 +17,7 @@ import './customization.css';
 import './netlify-only.css';
 import './v2.css';
 
-type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'canary-cutover' | 'staging-edge' | 'current-manager' | 'account';
+type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'canary-cutover' | 'staging-edge' | 'production-eligibility' | 'current-manager' | 'account';
 
 const capabilities = [
   'Verified customer accounts and VPS sessions',
@@ -49,7 +50,9 @@ const capabilities = [
   'Persistent staging monitor recovers after Site Manager restarts and rolls back on repeated failure',
   'Staging nnn runtime reuses the preview non-trading safety posture',
   'Staging and production nnn release approvals are separate',
-  'Production traffic and production cutover remain database-locked during staging',
+  'Immutable production-eligibility evidence ties parity, plan, canary and staging together',
+  'Final Step 15 admin approval expires and revalidates before any future execution',
+  'Production traffic and production cutover remain database-locked through Step 15',
   'nnn production main isolated until explicit final cutover',
   'Payment lifecycle intentionally deferred',
 ];
@@ -89,7 +92,8 @@ function AuthenticatedWorkspace() {
                     : view === 'cutover-orchestration' ? 'Cutover Plans'
                       : view === 'canary-cutover' ? 'Canary Drill'
                         : view === 'staging-edge' ? 'Staging Edge'
-                          : 'Site Manager V2';
+                          : view === 'production-eligibility' ? 'Production Eligibility'
+                            : 'Site Manager V2';
 
   const websitesActive = ['my-websites', 'builder', 'runtime-preview'].includes(view);
 
@@ -108,6 +112,7 @@ function AuthenticatedWorkspace() {
         <button className={view === 'cutover-orchestration' ? 'is-active' : ''} type="button" onClick={() => setView('cutover-orchestration')}>Cutover Plans</button>
         <button className={view === 'canary-cutover' ? 'is-active' : ''} type="button" onClick={() => setView('canary-cutover')}>Canary Drill</button>
         <button className={view === 'staging-edge' ? 'is-active' : ''} type="button" onClick={() => setView('staging-edge')}>Staging Edge</button>
+        <button className={view === 'production-eligibility' ? 'is-active' : ''} type="button" onClick={() => setView('production-eligibility')}>Production Eligibility</button>
         <button className={view === 'account' ? 'is-active' : ''} type="button" onClick={() => setView('account')}>Account</button>
       </nav>
       <div className="v2-sidebar-footer"><span className="v2-status-dot" />Netlify deployment paused</div>
@@ -116,7 +121,7 @@ function AuthenticatedWorkspace() {
     <main className="v2-main">
       <header className="v2-topbar"><div><p>DEVELOPMENT WORKSPACE</p><h1>{pageTitle}</h1></div><div className="v2-account-chip"><div><strong>{user.display_name || 'Site Manager customer'}</strong><small>{user.email}</small></div><button type="button" onClick={() => void logout()}>Sign out</button></div></header>
       {view === 'account' && <AccountView />}
-      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} onOpenCanary={() => setView('canary-cutover')} onOpenStaging={() => setView('staging-edge')} />}
+      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} onOpenCanary={() => setView('canary-cutover')} onOpenStaging={() => setView('staging-edge')} onOpenEligibility={() => setView('production-eligibility')} />}
       {view === 'my-websites' && <MyWebsitesView onCreateWebsite={() => setView('create-website')} onContinueSetup={openBuilder} onPreviewWebsite={openPreview} onManageDomains={openDomains} />}
       {view === 'create-website' && <CreateWebsiteView onCreated={openBuilder} onCancel={() => setView('my-websites')} />}
       {view === 'builder' && builderWebsiteId && <WebsiteBuilderView websiteId={builderWebsiteId} onBack={() => setView('my-websites')} onCompleted={() => setView('my-websites')} />}
@@ -128,6 +133,7 @@ function AuthenticatedWorkspace() {
       {view === 'cutover-orchestration' && <CutoverOrchestrationWorkspace />}
       {view === 'canary-cutover' && <CanaryCutoverWorkspace />}
       {view === 'staging-edge' && <StagingEdgeWorkspace />}
+      {view === 'production-eligibility' && <ProductionEligibilityWorkspace />}
     </main>
   </div>;
 }
@@ -136,25 +142,25 @@ function AccountView() {
   const { user } = useAuth();
   if (!user) return null;
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 14 · REAL STAGING EDGE + CUTOVER MONITOR</p><h2>The proven canary state machine now has a real HTTPS reverse-proxy adapter for an isolated staging hostname.</h2><p>Step 14 serves the exact held nnn build through its own staging Caddy process, verifies runtime/site identity over HTTPS and persists monitor state in PostgreSQL so a Site Manager restart resumes health supervision instead of forgetting the active rehearsal.</p></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 15 · PRODUCTION ELIGIBILITY + FINAL APPROVAL</p><h2>Production readiness is now a short-lived, immutable evidence state rather than a loose operator decision.</h2><p>Step 15 binds current parity, the armed cutover plan, passed canary, fresh real staging rehearsal, exact held nnn SHA, hostname, V2 fingerprint and rollback evidence. Final approval records authorization, but execution remains unavailable.</p></div></section>
     <section className="v2-grid">
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EMAIL</span><h3>{user.email}</h3></div><span className="v2-state good">VERIFIED</span></div><p>Email verification protects the customer control plane.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">STAGING EDGE</span><h3>Dedicated Caddy</h3></div><span className="v2-state good">ISOLATED</span></div><p>Staging has a separate hostname, Caddyfile, admin endpoint, approval flag and runtime token channel.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in staging or cutover verification.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">FINAL APPROVAL</span><h3>Evidence-bound</h3></div><span className="v2-state good">ADMIN ONLY</span></div><p>Approval expires and becomes invalid if staging evidence, configuration, source or runtime evidence stops matching.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in production eligibility.</p></article>
     </section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Production cutover adapter and explicit one-site live approval gate</h2><span>Step 15 will build the production-only route execution contract from the now-proven staging adapter, with an explicit operator approval, one migrated site at a time, immediate health verification and rollback protection. It will remain disabled by default until an actual production cutover is explicitly authorized.</span></div><div className="v2-step-number">15</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>One-site production execution adapter with automatic rollback</h2><span>Step 16 will be the first milestone allowed to design a real production route switch. It must consume a current Step 15 APPROVED record, revalidate it at execution time, move only one migrated site, health-check the exact shared nnn runtime and automatically restore the frozen legacy route on failure.</span></div><div className="v2-step-number">16</div></section>
   </>;
 }
 
-function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity, onOpenCutover, onOpenCanary, onOpenStaging }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void; onOpenCutover: () => void; onOpenCanary: () => void; onOpenStaging: () => void }) {
+function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity, onOpenCutover, onOpenCanary, onOpenStaging, onOpenEligibility }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void; onOpenCutover: () => void; onOpenCanary: () => void; onOpenStaging: () => void; onOpenEligibility: () => void }) {
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 14 · REAL STAGING-HOST EXECUTION ADAPTER + CUTOVER MONITOR</p><h2>The held nnn runtime can now be exercised behind a dedicated real Caddy/HTTPS staging edge before any customer hostname is touched.</h2><p>A passed Step 13 canary can progress to a staging-only route. Site Manager injects a short-lived runtime credential, validates the exact held nnn contract and site identity through HTTPS, persists the rollback window, resumes monitoring after restarts and automatically removes the staging route after repeated health failure.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenStaging}>Open staging edge</button><button className="v2-primary-button" type="button" onClick={onOpenCanary}>Open canary drill</button><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 15 · PRODUCTION CUTOVER ELIGIBILITY + FINAL APPROVAL GATE</p><h2>A migrated site cannot become production eligible until the complete evidence chain still matches right now.</h2><p>Site Manager joins Step 11 parity, the Step 12 immutable armed plan, the Step 13 passed canary, the fresh Step 14 real HTTPS staging pass, the held nnn contract, current V2 fingerprint, primary hostname and rollback evidence into one immutable short-lived record. Final admin approval still does not move traffic.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenEligibility}>Open production eligibility</button><button className="v2-primary-button" type="button" onClick={onOpenStaging}>Open staging edge</button><button className="v2-primary-button" type="button" onClick={onOpenCanary}>Open canary drill</button><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
     <section className="v2-grid">
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EDGE</span><h3>Real HTTPS</h3></div><span className="v2-state good">STAGING ONLY</span></div><p>The Step 14 adapter calls real Caddy validate/reload and then requests the shared nnn runtime through HTTPS.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">RECOVERY</span><h3>Persistent monitor</h3></div><span className="v2-state good">RESTART SAFE</span></div><p>PostgreSQL stores the active run, health state and rollback deadline so a Site Manager restart resumes supervision.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Still unchanged</h3></div><span className="v2-state good">LOCKED</span></div><p>The staging schema cannot represent production traffic movement or production cutover, and its Caddyfile is separate from customer routes.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EVIDENCE</span><h3>Immutable</h3></div><span className="v2-state good">STEP 15</span></div><p>The exact source, held nnn SHA, V2 fingerprint, hostname, upstream run IDs and rollback snapshot are frozen.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">FRESHNESS</span><h3>Short lived</h3></div><span className="v2-state good">RECHECKED</span></div><p>Old staging evidence or changed source/configuration invalidates eligibility instead of carrying approval forward.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Still unchanged</h3></div><span className="v2-state good">LOCKED</span></div><p>The Step 15 API has an explicit execute route only to return 409 and record that execution was blocked.</p></article>
     </section>
     <section className="v2-section"><div className="v2-section-heading"><div><p>FOUNDATION</p><h2>What is working now</h2></div></div><div className="v2-capability-grid">{capabilities.map(item => <div className="v2-capability" key={item}><span>✓</span><strong>{item}</strong></div>)}</div></section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Production cutover adapter and explicit one-site live approval gate</h2><span>Step 15 will translate the proven staging route/health/rollback mechanics into a production-only adapter with stronger explicit authorization. It will remain disabled by default and still operate one migrated site at a time.</span></div><div className="v2-step-number">15</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>One-site production execution adapter with automatic rollback</h2><span>Step 16 will be the first execution milestone. It must require a current Step 15 APPROVED record and preserve a hard one-site-at-a-time production lock, immediate HTTPS/runtime verification, a rollback window and automatic restoration of the legacy route on failure.</span></div><div className="v2-step-number">16</div></section>
   </>;
 }
