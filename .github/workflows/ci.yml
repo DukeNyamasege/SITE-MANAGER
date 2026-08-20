@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: DukeNyamasege/nnn
-          ref: feat/staging-rehearsal-contract
+          ref: hold/site-manager-v2-integration-2026-08-20
           path: .staging/nnn
 
       - name: Build and validate held nnn artifact
