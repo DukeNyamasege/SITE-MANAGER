@@ -63,6 +63,9 @@ jobs:
             node --check "$file"
           done
 
+      - name: Validate nnn builder contract
+        run: node scripts/validate-nnn-contract.mjs
+
       - name: Apply PostgreSQL migrations
         run: npm run db:migrate
 
