@@ -6,13 +6,16 @@ import { normalizeDerivScopes, normalizeNnnColors, normalizeNnnNavigation } from
 const router = express.Router();
 
 const runtimeSelect = `
-  SELECT w.id, w.site_key, w.name, w.status, w.primary_domain, w.domain_status,
+  SELECT w.id, w.site_key, w.name, w.source, w.status, w.primary_domain, w.domain_status,
          c.brand_name, c.tagline, c.logo_url, c.navigation, c.colors,
          c.deriv_client_id, c.deriv_scopes, c.deriv_environment, c.configuration_status,
          pd.hostname AS managed_hostname, pd.kind AS managed_domain_kind,
          pd.ownership_status AS managed_ownership_status,
          pd.routing_status AS managed_routing_status,
          pd.ssl_status AS managed_ssl_status,
+         legacy.legacy_site_id, legacy.source_commit AS legacy_source_commit,
+         legacy.source_fingerprint AS legacy_source_fingerprint,
+         legacy.drift_status AS legacy_drift_status,
          dep.id AS deployment_id, dep.status AS deployment_status_record,
          dep.runtime_release AS deployment_runtime_release,
          dep.contract_version AS deployment_contract_version,
@@ -20,6 +23,7 @@ const runtimeSelect = `
     FROM websites w
     JOIN website_configs c ON c.website_id = w.id
     LEFT JOIN website_domains pd ON pd.website_id = w.id AND pd.is_primary = TRUE
+    LEFT JOIN legacy_nnn_site_imports legacy ON legacy.website_id = w.id AND legacy.status = 'assigned'
     LEFT JOIN LATERAL (
       SELECT d.id, d.status, d.runtime_release, d.contract_version, d.activated_at
         FROM website_deployments d
@@ -68,6 +72,14 @@ function shapeRuntime(row, mode, previewExpiresAt = null) {
       routing_status: row.managed_routing_status || 'pending',
       ssl_status: row.managed_ssl_status || 'pending',
     },
+    migration: row.source === 'migrated' && row.legacy_site_id ? {
+      source: 'legacy-nnn',
+      legacy_site_id: row.legacy_site_id,
+      source_commit: row.legacy_source_commit,
+      source_fingerprint: row.legacy_source_fingerprint,
+      drift_status: row.legacy_drift_status || 'current',
+      production_cutover_performed: false,
+    } : null,
     deployment: row.deployment_id ? {
       id: row.deployment_id,
       status: row.deployment_status_record,
