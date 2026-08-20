@@ -1,0 +1,86 @@
+import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import express from 'express';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
+import authRouter from './auth.js';
+import { getPool } from './db.js';
+
+const app = express();
+const port = Number(process.env.PORT || 8787);
+const appOrigin = process.env.APP_URL ? new URL(process.env.APP_URL).origin : '';
+
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-origin' } }));
+app.use(express.json({ limit: '64kb' }));
+
+app.use((request, response, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method) || !appOrigin) return next();
+  const origin = request.headers.origin;
+  if (origin && origin !== appOrigin) return response.status(403).json({ message: 'Cross-origin request blocked.' });
+  return next();
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many account requests. Try again later.' },
+});
+
+const sensitiveLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Try again later.' },
+});
+
+app.get('/api/v2/health', async (_request, response, next) => {
+  try {
+    await getPool().query('SELECT 1');
+    response.json({ ok: true, service: 'site-manager-v2', database: 'connected' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.use('/api/v2/auth', authLimiter);
+app.use('/api/v2/auth/login', sensitiveLimiter);
+app.use('/api/v2/auth/register', sensitiveLimiter);
+app.use('/api/v2/auth/forgot-password', sensitiveLimiter);
+app.use('/api/v2/auth/reset-password', sensitiveLimiter);
+app.use('/api/v2/auth', authRouter);
+
+if (process.env.NODE_ENV === 'production') {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const dist = path.resolve(__dirname, '..', 'dist');
+  app.use(express.static(dist, { index: false, maxAge: '1h' }));
+  app.get('*', (_request, response) => response.sendFile(path.join(dist, 'index.html')));
+}
+
+app.use((error, _request, response, _next) => {
+  console.error(error);
+  const status = Number(error?.status) || 500;
+  response.status(status).json({
+    message: status >= 500 ? 'The Site Manager server could not complete this request.' : String(error.message || 'Request failed.'),
+  });
+});
+
+const server = app.listen(port, () => {
+  console.log(`Site Manager VPS server listening on port ${port}`);
+});
+
+async function shutdown(signal) {
+  console.log(`${signal} received; shutting down Site Manager server.`);
+  server.close(async () => {
+    try { await getPool().end(); } catch {}
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
