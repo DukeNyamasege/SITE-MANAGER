@@ -19,6 +19,7 @@ const nnnDist = process.env.NNN_REHEARSAL_DIST_DIR ? path.resolve(process.env.NN
 const nnnRelease = String(process.env.NNN_REHEARSAL_RELEASE || 'nnn-rehearsal-ci');
 const email = `rehearsal-${Date.now()}@example.test`;
 const password = 'Rehearsal-Only-42!';
+const rehearsalDomain = `rehearsal-${Date.now()}.available.test`;
 const pool = new Pool({ connectionString: databaseUrl, ssl: false });
 let child;
 let cookie = '';
@@ -85,6 +86,8 @@ try {
       APP_URL: baseUrl,
       NODE_ENV: 'test',
       AUTH_DEV_RETURN_LINKS: 'true',
+      DOMAIN_AVAILABILITY_MODE: 'stub',
+      DOMAIN_OWNERSHIP_TEST_MODE: 'verified',
       SITE_UPLOAD_DIR: uploads,
       NNN_PREVIEW_URL: 'https://preview.staging.example.test',
       PREVIEW_TTL_MINUTES: '10',
@@ -125,11 +128,31 @@ try {
   assert.ok(userId);
   step('email verification creates authenticated VPS session');
 
-  const created = await request('/api/v2/websites', { method: 'POST', body: { name: 'Rehearsal Alpha' }, expected: [201] });
+  const searchedDomain = await request('/api/v2/domain-onboarding/check', {
+    method: 'POST',
+    body: { hostname: rehearsalDomain, registrar: 'namecheap' },
+  });
+  assert.equal(searchedDomain.payload.intent.availability_status, 'available');
+  const purchasedDomain = await request(`/api/v2/domain-onboarding/${searchedDomain.payload.intent.id}/purchase-confirmed`, {
+    method: 'POST',
+    body: { already_owned: false },
+  });
+  assert.equal(purchasedDomain.payload.intent.purchase_status, 'confirmed');
+  const ownedDomain = await request(`/api/v2/domain-onboarding/${searchedDomain.payload.intent.id}/check-ownership`, { method: 'POST' });
+  assert.equal(ownedDomain.payload.verified, true);
+  assert.equal(ownedDomain.payload.intent.ownership_status, 'verified');
+  step('new customer secures and verifies domain before website creation', { hostname: rehearsalDomain });
+
+  const created = await request('/api/v2/websites', {
+    method: 'POST',
+    body: { name: 'Rehearsal Alpha', domain_onboarding_id: searchedDomain.payload.intent.id },
+    expected: [201],
+  });
   const website = created.payload.website;
   assert.ok(website.id && website.site_key);
+  assert.equal(website.primary_domain, rehearsalDomain);
   assert.equal(website.subscription.billing_status, 'not_started');
-  step('website ownership created with billing dormant', { website_id: website.id, site_key: website.site_key });
+  step('website ownership created from verified domain with billing dormant', { website_id: website.id, site_key: website.site_key });
 
   await request(`/api/v2/builder/${website.id}/identity`, {
     method: 'PUT',
@@ -179,10 +202,12 @@ try {
   step('private real-template runtime receives current manager configuration');
 
   await request(`/api/v2/domains/${website.id}/approve-preview`, { method: 'POST' });
-  const platform = await request(`/api/v2/domains/${website.id}/platform`, { method: 'POST', expected: [201] });
-  const domain = platform.payload.domains.find(item => item.kind === 'platform');
+  const domainState = await request(`/api/v2/domains/${website.id}`);
+  const domain = domainState.payload.domains.find(item => item.kind === 'custom' && item.is_primary);
   assert.ok(domain?.id && domain?.hostname);
-  step('platform hostname reserved through domain API', { hostname: domain.hostname });
+  assert.equal(domain.hostname, rehearsalDomain);
+  assert.equal(domain.ownership_status, 'verified');
+  step('domain-first ownership proof remains attached as primary website hostname', { hostname: domain.hostname });
 
   // DNS propagation and public TLS are external infrastructure boundaries. In the isolated
   // rehearsal database we advance only those two facts, then return to public APIs for all
@@ -251,6 +276,7 @@ try {
     site_manager: { service: 'site-manager-v2', api: baseUrl },
     nnn: { runtime: 'nnn', release: nnnRelease, contract_version: 2, artifact_checked: Boolean(nnnDist) },
     website: { id: website.id, site_key: website.site_key, hostname: domain.hostname },
+    domain_first_onboarding: true,
     steps: results,
   };
   const reportDir = process.env.STAGING_REHEARSAL_REPORT_DIR ? path.resolve(process.env.STAGING_REHEARSAL_REPORT_DIR) : path.join(root, 'reports');
