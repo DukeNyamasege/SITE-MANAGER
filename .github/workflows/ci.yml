@@ -31,9 +31,15 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Validate Netlify functions
+      - name: Validate legacy Netlify functions
         run: |
           for file in netlify/functions/*.mjs; do
+            node --check "$file"
+          done
+
+      - name: Validate VPS server and migration scripts
+        run: |
+          for file in server/*.js scripts/*.mjs; do
             node --check "$file"
           done
 
