@@ -22,6 +22,10 @@ const capabilities = [
   'Custom domains and Site Manager platform addresses',
   'DNS ownership, VPS routing and HTTPS eligibility checks',
   'Versioned shared-nnn VPS publishing engine',
+  'Immutable Site Manager and nnn release directories with rollback',
+  'Dedicated private preview hostname on the shared nnn runtime',
+  'Hardened systemd, Caddy and daily backup package',
+  'nnn production main isolated until explicit final cutover',
   'Payment lifecycle intentionally deferred',
 ];
 
@@ -92,25 +96,25 @@ function AccountView() {
   const { user } = useAuth();
   if (!user) return null;
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">SHARED VPS PUBLISHING</p><h2>Site Manager now knows how a technically ready website becomes a versioned nnn deployment.</h2><p>The publisher records each deployment, generates a deterministic hostname route, keeps every customer on the same shared nnn build and only marks a website live after VPS apply mode passes HTTPS runtime health checks.</p></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">VPS HOST PACKAGE</p><h2>The control plane and shared nnn runtime now have a defined production home, release model and rollback path.</h2><p>Site Manager runs as a hardened systemd Node service, PostgreSQL keeps persistent control-plane state, Caddy owns HTTPS and hostname routing, and one immutable nnn release serves previews plus customer websites.</p></div></section>
     <section className="v2-grid">
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EMAIL</span><h3>{user.email}</h3></div><span className="v2-state good">VERIFIED</span></div><p>Email verification protects the customer control plane.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">RUNTIME</span><h3>One shared nnn build</h3></div><span className="v2-state good">CONTRACT V2</span></div><p>Customer hostnames route to one nnn distribution; PostgreSQL supplies the site-specific runtime configuration.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in publishing.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">RUNTIME</span><h3>One shared nnn build</h3></div><span className="v2-state good">RELEASE SAFE</span></div><p>nnn is installed once under an atomic current-release symlink and requires explicit cutover approval before activation.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in publishing or VPS installation.</p></article>
     </section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>VPS installation package and service orchestration</h2><span>Step 8 will package exactly what belongs on the VPS: Site Manager service, PostgreSQL requirements, the shared nnn release directory, Caddy base configuration, persistent uploads/state and controlled release switching.</span></div><div className="v2-step-number">08</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Staging VPS and end-to-end cutover rehearsal</h2><span>Step 9 will exercise the complete lifecycle on an isolated staging host: install services, load the held nnn integration, configure preview/DNS, publish test websites, test rollback and verify that existing production nnn sites remain untouched.</span></div><div className="v2-step-number">09</div></section>
   </>;
 }
 
 function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void }) {
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 7 · VPS PUBLISHING ENGINE</p><h2>Deployment now has a real versioned contract instead of being a vague final button.</h2><p>Once the technical gate is green, Site Manager can prepare—or on an intentionally enabled VPS, apply—the Caddy route that serves the shared nnn runtime and then confirm it through the nnn health contract.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 8 · VPS INSTALLATION PACKAGE</p><h2>The publishing engine now has an exact host layout instead of a collection of manual SSH assumptions.</h2><p>Immutable releases, systemd, PostgreSQL secrets, Caddy manager/preview/customer routing, persistent uploads, daily backups and rollback are packaged in source. Production nnn/main remains isolated until explicit final cutover.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
     <section className="v2-grid">
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CONTROL PLANE</span><h3>DukeNyamasege/SITE-MANAGER</h3></div><span className="v2-state good">PUBLISHER</span></div><p>Owns readiness, deployment history, route generation, VPS apply state and active site identity.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">SITE TEMPLATE</span><h3>DukeNyamasege/nnn</h3></div><span className="v2-state good">SHARED RUNTIME</span></div><p>Publishes a machine-readable runtime contract and understands active deployment metadata from Site Manager.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">SAFETY</span><h3>Plan by default</h3></div><span className="v2-state good">NO CUTOVER</span></div><p>Development creates exact deployment plans without touching the real VPS. Apply mode must be explicitly enabled on the production host.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CONTROL PLANE</span><h3>systemd + PostgreSQL</h3></div><span className="v2-state good">PACKAGED</span></div><p>Site Manager runs without root, secrets stay outside Git and persistent state is separated from immutable application releases.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">SITE TEMPLATE</span><h3>Shared nnn releases</h3></div><span className="v2-state good">PR-ONLY</span></div><p>The integration build is validated as a deployable artifact but remains in draft PR #48; current nnn/main users stay on the stable production code.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EDGE</span><h3>Caddy + HTTPS</h3></div><span className="v2-state good">DEFINED</span></div><p>Manager, private preview and generated customer routes share one edge and one nnn distribution, with plan mode remaining the default.</p></article>
     </section>
     <section className="v2-section"><div className="v2-section-heading"><div><p>FOUNDATION</p><h2>What is working now</h2></div></div><div className="v2-capability-grid">{capabilities.map(item => <div className="v2-capability" key={item}><span>✓</span><strong>{item}</strong></div>)}</div></section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>VPS installation package and service orchestration</h2><span>Step 8 will define and build the exact production filesystem/services for SITE-MANAGER and nnn so the publishing engine has a repeatable host to operate against.</span></div><div className="v2-step-number">08</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Staging VPS and end-to-end cutover rehearsal</h2><span>Step 9 will prove the package on an isolated staging environment before any production nnn merge or customer-site cutover is allowed.</span></div><div className="v2-step-number">09</div></section>
   </>;
 }
