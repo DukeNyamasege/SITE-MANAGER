@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -24,7 +25,7 @@ app.use((request, response, next) => {
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 30,
+  limit: 300,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { message: 'Too many account requests. Try again later.' },
@@ -32,7 +33,7 @@ const authLimiter = rateLimit({
 
 const sensitiveLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { message: 'Too many attempts. Try again later.' },
