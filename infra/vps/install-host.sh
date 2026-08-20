@@ -83,6 +83,12 @@ PORT=8787
 NODE_ENV=production
 AUTH_SESSION_TTL_DAYS=30
 AUTH_DEV_RETURN_LINKS=false
+DOMAIN_AVAILABILITY_MODE=auto
+NAMECHEAP_API_USER=
+NAMECHEAP_API_KEY=
+NAMECHEAP_USERNAME=
+NAMECHEAP_CLIENT_IP=
+NAMECHEAP_API_SANDBOX=false
 NNN_PREVIEW_URL=https://${NNN_PREVIEW_DOMAIN}
 PREVIEW_TTL_MINUTES=60
 SITE_UPLOAD_DIR=/srv/site-manager/data/uploads
@@ -146,4 +152,5 @@ fi
 
 echo "VPS filesystem and service layout prepared."
 echo "No GitHub/nnn production-write credentials were installed on the VPS."
+echo "Domain-first onboarding defaults to RDAP until optional Namecheap API credentials are added to /etc/site-manager/site-manager.env."
 echo "Next: run provision-postgres.sh, install a Site Manager release, then install the explicitly approved nnn integration release."
