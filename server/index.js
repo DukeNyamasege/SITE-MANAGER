@@ -10,6 +10,7 @@ import builderRouter from './builder.js';
 import previewRouter from './preview.js';
 import runtimeRouter from './runtime.js';
 import domainsRouter from './domains.js';
+import deploymentsRouter from './deployments.js';
 import { uploadsRoot } from './uploads.js';
 import { getPool } from './db.js';
 
@@ -77,6 +78,7 @@ app.use('/api/v2/websites', websiteMutationLimiter, websitesRouter);
 app.use('/api/v2/builder', websiteMutationLimiter, builderRouter);
 app.use('/api/v2/preview', websiteMutationLimiter, previewRouter);
 app.use('/api/v2/domains', websiteMutationLimiter, domainsRouter);
+app.use('/api/v2/deployments', websiteMutationLimiter, deploymentsRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
