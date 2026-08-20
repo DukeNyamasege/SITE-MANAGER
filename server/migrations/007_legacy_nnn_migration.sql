@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS legacy_nnn_site_imports (
   free_bot_manifest_sha TEXT,
   source_snapshot JSONB NOT NULL,
   source_fingerprint CHAR(64) NOT NULL,
+  assigned_source_fingerprint CHAR(64),
+  drift_status TEXT NOT NULL DEFAULT 'not_assigned' CHECK (drift_status IN ('not_assigned', 'current', 'drifted')),
   status TEXT NOT NULL DEFAULT 'unassigned' CHECK (status IN ('unassigned', 'assigned', 'ignored', 'error')),
   assigned_user_id UUID REFERENCES users(id) ON DELETE RESTRICT,
   website_id UUID UNIQUE REFERENCES websites(id) ON DELETE RESTRICT,
@@ -37,10 +39,13 @@ CREATE TABLE IF NOT EXISTS legacy_nnn_site_imports (
   last_audited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CHECK ((status = 'assigned') = (assigned_user_id IS NOT NULL AND website_id IS NOT NULL))
+  CHECK ((status = 'assigned') = (assigned_user_id IS NOT NULL AND website_id IS NOT NULL)),
+  CHECK ((status = 'assigned') = (assigned_source_fingerprint IS NOT NULL)),
+  CHECK (status = 'assigned' OR drift_status = 'not_assigned')
 );
 
 CREATE INDEX IF NOT EXISTS legacy_nnn_site_imports_status_idx ON legacy_nnn_site_imports(status);
+CREATE INDEX IF NOT EXISTS legacy_nnn_site_imports_drift_status_idx ON legacy_nnn_site_imports(drift_status);
 CREATE INDEX IF NOT EXISTS legacy_nnn_site_imports_display_domain_lower_idx ON legacy_nnn_site_imports(LOWER(display_domain));
 CREATE INDEX IF NOT EXISTS legacy_nnn_site_imports_assigned_user_id_idx ON legacy_nnn_site_imports(assigned_user_id);
 
@@ -49,3 +54,5 @@ CREATE INDEX IF NOT EXISTS legacy_nnn_site_imports_assigned_user_id_idx ON legac
 -- administrator may assign an inventory record to a verified customer account.
 -- Assignment creates a V2 shadow website with the exact legacy site_key but does
 -- not make it a live VPS deployment or change current nnn production traffic.
+-- Subsequent audits update the source snapshot only; if the live legacy source has
+-- changed since assignment the record becomes drifted instead of overwriting V2.
