@@ -6,7 +6,7 @@ export async function authenticatedUser(request) {
   if (!raw) return null;
 
   const result = await query(
-    `SELECT u.id, u.email, u.display_name, u.email_verified_at, u.status, u.created_at,
+    `SELECT u.id, u.email, u.display_name, u.email_verified_at, u.status, u.role, u.created_at,
             s.id AS session_id, s.last_seen_at
        FROM user_sessions s
        JOIN users u ON u.id = s.user_id
@@ -30,6 +30,7 @@ export async function authenticatedUser(request) {
     display_name: row.display_name || '',
     email_verified: true,
     status: row.status,
+    role: row.role === 'admin' ? 'admin' : 'customer',
     created_at: row.created_at,
   };
 }
@@ -43,4 +44,11 @@ export async function requireAuthenticatedUser(request, response, next) {
   } catch (error) {
     return next(error);
   }
+}
+
+export function requireAdmin(request, response, next) {
+  if (!request.authUser || request.authUser.role !== 'admin') {
+    return response.status(403).json({ message: 'Site Manager administrator access is required.' });
+  }
+  return next();
 }

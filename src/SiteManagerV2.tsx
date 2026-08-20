@@ -4,6 +4,7 @@ import { AuthProvider, AuthScreen, useAuth } from './auth';
 import { WebsiteBuilderView } from './builder';
 import { DeploymentsWorkspace } from './deployments';
 import { DomainsWorkspace } from './domains';
+import { LegacyMigrationWorkspace } from './legacy-migration';
 import { RuntimePreviewView } from './runtime-preview';
 import { CreateWebsiteView, MyWebsitesView, type WebsiteRecord } from './websites';
 import './styles.css';
@@ -11,7 +12,7 @@ import './customization.css';
 import './netlify-only.css';
 import './v2.css';
 
-type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'current-manager' | 'account';
+type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'current-manager' | 'account';
 
 const capabilities = [
   'Verified customer accounts and VPS sessions',
@@ -27,6 +28,8 @@ const capabilities = [
   'Hardened systemd, Caddy and daily backup package',
   'Automated Site Manager ↔ held nnn staging rehearsal on Node 22/24',
   'Legacy HTML runtime fallback regression gate',
+  'Audited and idempotent existing-nnn migration inventory',
+  'Admin-only legacy ownership assignment with drift detection',
   'nnn production main isolated until explicit final cutover',
   'Payment lifecycle intentionally deferred',
 ];
@@ -61,7 +64,8 @@ function AuthenticatedWorkspace() {
           : view === 'runtime-preview' ? 'Preview & Assets'
             : view === 'domains' ? 'Domains'
               : view === 'deployments' ? 'Deployments'
-                : 'Site Manager V2';
+                : view === 'legacy-migration' ? 'Legacy nnn Migration'
+                  : 'Site Manager V2';
 
   const websitesActive = ['my-websites', 'builder', 'runtime-preview'].includes(view);
 
@@ -75,6 +79,7 @@ function AuthenticatedWorkspace() {
         <button type="button" disabled>Templates</button>
         <button className={view === 'domains' ? 'is-active' : ''} type="button" onClick={() => setView('domains')}>Domains</button>
         <button className={view === 'deployments' ? 'is-active' : ''} type="button" onClick={() => setView('deployments')}>Deployments</button>
+        <button className={view === 'legacy-migration' ? 'is-active' : ''} type="button" onClick={() => setView('legacy-migration')}>Legacy Migration</button>
         <button className={view === 'account' ? 'is-active' : ''} type="button" onClick={() => setView('account')}>Account</button>
       </nav>
       <div className="v2-sidebar-footer"><span className="v2-status-dot" />Netlify deployment paused</div>
@@ -83,13 +88,14 @@ function AuthenticatedWorkspace() {
     <main className="v2-main">
       <header className="v2-topbar"><div><p>DEVELOPMENT WORKSPACE</p><h1>{pageTitle}</h1></div><div className="v2-account-chip"><div><strong>{user.display_name || 'Site Manager customer'}</strong><small>{user.email}</small></div><button type="button" onClick={() => void logout()}>Sign out</button></div></header>
       {view === 'account' && <AccountView />}
-      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} />}
+      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} />}
       {view === 'my-websites' && <MyWebsitesView onCreateWebsite={() => setView('create-website')} onContinueSetup={openBuilder} onPreviewWebsite={openPreview} onManageDomains={openDomains} />}
       {view === 'create-website' && <CreateWebsiteView onCreated={openBuilder} onCancel={() => setView('my-websites')} />}
       {view === 'builder' && builderWebsiteId && <WebsiteBuilderView websiteId={builderWebsiteId} onBack={() => setView('my-websites')} onCompleted={() => setView('my-websites')} />}
       {view === 'runtime-preview' && previewWebsiteId && <RuntimePreviewView websiteId={previewWebsiteId} onBack={() => setView('my-websites')} onEditSetup={editPreviewedWebsite} />}
       {view === 'domains' && <DomainsWorkspace initialWebsiteId={domainWebsiteId} focus="domains" />}
       {view === 'deployments' && <DeploymentsWorkspace initialWebsiteId={domainWebsiteId} />}
+      {view === 'legacy-migration' && <LegacyMigrationWorkspace />}
     </main>
   </div>;
 }
@@ -98,25 +104,25 @@ function AccountView() {
   const { user } = useAuth();
   if (!user) return null;
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STAGING REHEARSAL</p><h2>The control plane and held nnn runtime now have a repeatable end-to-end compatibility gate before production.</h2><p>The rehearsal builds the exact non-production nnn artifact, creates a real V2 account and website against PostgreSQL, verifies preview/runtime configuration, prepares the shared-runtime route and proves the live Site Manager runtime contract without touching production nnn/main.</p></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">LEGACY NNN MIGRATION</p><h2>Current nnn-managed sites can now enter V2 without moving their production traffic.</h2><p>The stable nnn registry is audited into PostgreSQL first. Administrator assignment then creates a customer-owned shadow website with the exact legacy site key, domain aliases, Deriv configuration and customization, while production remains on nnn/main.</p></div></section>
     <section className="v2-grid">
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EMAIL</span><h3>{user.email}</h3></div><span className="v2-state good">VERIFIED</span></div><p>Email verification protects the customer control plane.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">RUNTIME</span><h3>Held nnn integration</h3></div><span className="v2-state good">REHEARSED</span></div><p>Publishing contract v2 and rehearsal contract v1 bind the exact nnn artifact to the Site Manager staging gate.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in staging or publishing readiness.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">MIGRATION</span><h3>Shadow first</h3></div><span className="v2-state good">SAFE</span></div><p>Assignment never marks the site live or deployed; the old nnn production route remains authoritative until cutover.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in migration.</p></article>
     </section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Existing nnn site migration into V2 ownership</h2><span>Step 10 will import the currently managed nnn sites into PostgreSQL without claiming them by domain alone, preserve their branding/navigation/Deriv configuration, assign ownership safely and make each one previewable in V2 before any production cutover.</span></div><div className="v2-step-number">10</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Dual-run parity and cutover readiness</h2><span>Step 11 will compare each migrated V2 shadow against its current live nnn site, surface configuration drift, verify preview parity and build per-site cutover readiness without switching production traffic.</span></div><div className="v2-step-number">11</div></section>
   </>;
 }
 
-function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void }) {
+function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void }) {
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 9 · STAGING & CUTOVER REHEARSAL</p><h2>Manager and template compatibility is now tested as one lifecycle before either can reach production.</h2><p>CI builds the held nnn integration, validates the legacy HTML fallback, runs real account/build/preview/domain/publish/runtime flows against PostgreSQL and emits a machine-readable rehearsal report. Public DNS/TLS/Caddy success is the only simulated external boundary.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 10 · EXISTING NNN SITE MIGRATION</p><h2>The live static registry now has a controlled path into V2 ownership without domain claiming or traffic cutover.</h2><p>Audit is pinned to an exact nnn source commit, imports are idempotent, ownership assignment is administrator-only, stable legacy site IDs are preserved and source drift is detected rather than silently overwriting V2.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
     <section className="v2-grid">
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CONTROL PLANE</span><h3>Real V2 API + PostgreSQL</h3></div><span className="v2-state good">REHEARSED</span></div><p>Registration, ownership, builder, assets, preview approval, domains, publishing and runtime history are exercised together.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">SITE TEMPLATE</span><h3>Held nnn artifact</h3></div><span className="v2-state good">PR-ONLY</span></div><p>The exact future shared runtime is built and validated during rehearsal while current nnn/main remains the stable production source.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">REGRESSION</span><h3>Legacy HTML fallback</h3></div><span className="v2-state good">GATED</span></div><p>The previous Unexpected token '&lt;' production incident is now an explicit template compatibility check before cutover.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">SOURCE</span><h3>Stable nnn registry</h3></div><span className="v2-state good">AUDITED</span></div><p>Registry entries, custom site configuration, inherited defaults and site-specific bot-manifest references are captured from an exact Git commit.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">OWNERSHIP</span><h3>Admin assignment</h3></div><span className="v2-state good">CONTROLLED</span></div><p>A domain alone cannot claim a site. The owner must already be an active verified Site Manager customer and assignment is performed through the admin boundary.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Shadow migration</h3></div><span className="v2-state good">NO CUTOVER</span></div><p>Migrated records appear in V2 but remain ready/not-deployed. Existing nnn/main continues serving current customer traffic.</p></article>
     </section>
     <section className="v2-section"><div className="v2-section-heading"><div><p>FOUNDATION</p><h2>What is working now</h2></div></div><div className="v2-capability-grid">{capabilities.map(item => <div className="v2-capability" key={item}><span>✓</span><strong>{item}</strong></div>)}</div></section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Existing nnn site migration into V2 ownership</h2><span>Step 10 will move the current static managed-site inventory into the V2 ownership/configuration model safely before production cutover is even considered.</span></div><div className="v2-step-number">10</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Dual-run parity and cutover readiness</h2><span>Step 11 will verify migrated V2 shadows against their still-live nnn sources and prepare site-by-site cutover gates without changing production traffic.</span></div><div className="v2-step-number">11</div></section>
   </>;
 }

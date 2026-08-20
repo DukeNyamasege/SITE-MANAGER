@@ -13,7 +13,7 @@ jobs:
   verify:
     name: Verify Node.js ${{ matrix.node-version }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -42,6 +42,7 @@ jobs:
       NNN_RUNTIME_RELEASE: nnn-ci-test
       NNN_SHARED_DIST_DIR: /srv/site-manager/nnn/current
       SITE_MANAGER_API_UPSTREAM: http://127.0.0.1:8787
+      NNN_LEGACY_EXPECTED_SHA: 148d3fc2d265a2ce724d1503369068fae44cce21
 
     steps:
       - name: Check out Site Manager
@@ -91,10 +92,29 @@ jobs:
       - name: Validate VPS publishing schema
         run: node scripts/validate-vps-publishing-schema.mjs
 
+      - name: Check out pinned production nnn migration source
+        uses: actions/checkout@v4
+        with:
+          repository: DukeNyamasege/nnn
+          ref: 148d3fc2d265a2ce724d1503369068fae44cce21
+          path: .legacy/nnn
+
+      - name: Audit and import legacy nnn inventory twice
+        env:
+          NNN_LEGACY_SOURCE_DIR: ${{ github.workspace }}/.legacy/nnn
+          LEGACY_NNN_REPORT_PATH: ${{ runner.temp }}/legacy-nnn-audit-node-${{ matrix.node-version }}.json
+        run: |
+          npm run legacy:audit
+          npm run legacy:import
+          npm run legacy:import
+
+      - name: Rehearse admin-only legacy ownership assignment
+        run: node scripts/rehearse-legacy-migration.mjs
+
       - name: Build Site Manager production bundle
         run: npm run build
 
-      - name: Check out held nnn staging integration
+      - name: Check out held nnn migration integration
         uses: actions/checkout@v4
         with:
           repository: DukeNyamasege/nnn
@@ -122,10 +142,12 @@ jobs:
           NNN_REHEARSAL_RELEASE="$NNN_SHA" \
           node scripts/rehearse-staging.mjs
 
-      - name: Upload staging rehearsal report
+      - name: Upload migration and staging reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: staging-rehearsal-node-${{ matrix.node-version }}
-          path: ${{ runner.temp }}/site-manager-rehearsals
+          name: step10-rehearsal-node-${{ matrix.node-version }}
+          path: |
+            ${{ runner.temp }}/legacy-nnn-audit-node-${{ matrix.node-version }}.json
+            ${{ runner.temp }}/site-manager-rehearsals
           if-no-files-found: ignore

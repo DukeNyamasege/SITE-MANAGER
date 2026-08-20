@@ -5,6 +5,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import authRouter from './auth.js';
+import adminRouter from './admin.js';
 import websitesRouter from './websites.js';
 import builderRouter from './builder.js';
 import previewRouter from './preview.js';
@@ -79,6 +80,7 @@ app.use('/api/v2/builder', websiteMutationLimiter, builderRouter);
 app.use('/api/v2/preview', websiteMutationLimiter, previewRouter);
 app.use('/api/v2/domains', websiteMutationLimiter, domainsRouter);
 app.use('/api/v2/deployments', websiteMutationLimiter, deploymentsRouter);
+app.use('/api/v2/admin', websiteMutationLimiter, adminRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));

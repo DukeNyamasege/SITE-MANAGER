@@ -10,6 +10,9 @@
     "server": "node server/index.js",
     "start": "node server/index.js",
     "db:migrate": "node scripts/migrate.mjs",
+    "legacy:audit": "node scripts/import-legacy-nnn.mjs",
+    "legacy:import": "node scripts/import-legacy-nnn.mjs --apply",
+    "admin:promote": "node scripts/promote-admin.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
@@ -29,7 +32,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.1.10",
-    "@types/react-dom": "^19.1.7",
+    "@types/react-dom": "^19.1.10",
     "@vitejs/plugin-react": "^5.0.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.2"
