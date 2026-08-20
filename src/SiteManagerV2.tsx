@@ -9,13 +9,14 @@ import { DomainsWorkspace } from './domains';
 import { LegacyMigrationWorkspace } from './legacy-migration';
 import { CutoverReadinessWorkspace } from './parity';
 import { RuntimePreviewView } from './runtime-preview';
+import { StagingEdgeWorkspace } from './staging-edge';
 import { CreateWebsiteView, MyWebsitesView, type WebsiteRecord } from './websites';
 import './styles.css';
 import './customization.css';
 import './netlify-only.css';
 import './v2.css';
 
-type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'canary-cutover' | 'current-manager' | 'account';
+type WorkspaceView = 'overview' | 'my-websites' | 'create-website' | 'builder' | 'runtime-preview' | 'domains' | 'deployments' | 'legacy-migration' | 'cutover-readiness' | 'cutover-orchestration' | 'canary-cutover' | 'staging-edge' | 'current-manager' | 'account';
 
 const capabilities = [
   'Verified customer accounts and VPS sessions',
@@ -43,7 +44,12 @@ const capabilities = [
   'Rollback timer begins only after held-nnn health criteria pass',
   'Automatic rollback drill restores the frozen legacy snapshot on canary health failure',
   'Migrated sites blocked from bypassing cutover through ordinary customer publishing',
-  'Production traffic and production cutover flags database-locked to false during Step 13',
+  'Dedicated real staging Caddy edge with a separate admin endpoint and Caddyfile',
+  'Real HTTPS staging health checks against the exact held nnn build and Site Manager runtime API',
+  'Persistent staging monitor recovers after Site Manager restarts and rolls back on repeated failure',
+  'Staging nnn runtime reuses the preview non-trading safety posture',
+  'Staging and production nnn release approvals are separate',
+  'Production traffic and production cutover remain database-locked during staging',
   'nnn production main isolated until explicit final cutover',
   'Payment lifecycle intentionally deferred',
 ];
@@ -82,7 +88,8 @@ function AuthenticatedWorkspace() {
                   : view === 'cutover-readiness' ? 'Cutover Readiness'
                     : view === 'cutover-orchestration' ? 'Cutover Plans'
                       : view === 'canary-cutover' ? 'Canary Drill'
-                        : 'Site Manager V2';
+                        : view === 'staging-edge' ? 'Staging Edge'
+                          : 'Site Manager V2';
 
   const websitesActive = ['my-websites', 'builder', 'runtime-preview'].includes(view);
 
@@ -100,6 +107,7 @@ function AuthenticatedWorkspace() {
         <button className={view === 'cutover-readiness' ? 'is-active' : ''} type="button" onClick={() => setView('cutover-readiness')}>Cutover Readiness</button>
         <button className={view === 'cutover-orchestration' ? 'is-active' : ''} type="button" onClick={() => setView('cutover-orchestration')}>Cutover Plans</button>
         <button className={view === 'canary-cutover' ? 'is-active' : ''} type="button" onClick={() => setView('canary-cutover')}>Canary Drill</button>
+        <button className={view === 'staging-edge' ? 'is-active' : ''} type="button" onClick={() => setView('staging-edge')}>Staging Edge</button>
         <button className={view === 'account' ? 'is-active' : ''} type="button" onClick={() => setView('account')}>Account</button>
       </nav>
       <div className="v2-sidebar-footer"><span className="v2-status-dot" />Netlify deployment paused</div>
@@ -108,7 +116,7 @@ function AuthenticatedWorkspace() {
     <main className="v2-main">
       <header className="v2-topbar"><div><p>DEVELOPMENT WORKSPACE</p><h1>{pageTitle}</h1></div><div className="v2-account-chip"><div><strong>{user.display_name || 'Site Manager customer'}</strong><small>{user.email}</small></div><button type="button" onClick={() => void logout()}>Sign out</button></div></header>
       {view === 'account' && <AccountView />}
-      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} onOpenCanary={() => setView('canary-cutover')} />}
+      {view === 'overview' && <OverviewView onOpenCurrentManager={() => setView('current-manager')} onCreateWebsite={() => setView('create-website')} onOpenDomains={() => setView('domains')} onOpenDeployments={() => setView('deployments')} onOpenMigration={() => setView('legacy-migration')} onOpenParity={() => setView('cutover-readiness')} onOpenCutover={() => setView('cutover-orchestration')} onOpenCanary={() => setView('canary-cutover')} onOpenStaging={() => setView('staging-edge')} />}
       {view === 'my-websites' && <MyWebsitesView onCreateWebsite={() => setView('create-website')} onContinueSetup={openBuilder} onPreviewWebsite={openPreview} onManageDomains={openDomains} />}
       {view === 'create-website' && <CreateWebsiteView onCreated={openBuilder} onCancel={() => setView('my-websites')} />}
       {view === 'builder' && builderWebsiteId && <WebsiteBuilderView websiteId={builderWebsiteId} onBack={() => setView('my-websites')} onCompleted={() => setView('my-websites')} />}
@@ -119,6 +127,7 @@ function AuthenticatedWorkspace() {
       {view === 'cutover-readiness' && <CutoverReadinessWorkspace />}
       {view === 'cutover-orchestration' && <CutoverOrchestrationWorkspace />}
       {view === 'canary-cutover' && <CanaryCutoverWorkspace />}
+      {view === 'staging-edge' && <StagingEdgeWorkspace />}
     </main>
   </div>;
 }
@@ -127,25 +136,25 @@ function AccountView() {
   const { user } = useAuth();
   if (!user) return null;
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 13 · CANARY CUTOVER & ROLLBACK DRILL</p><h2>An armed migrated site can now exercise the complete activation/health/rollback state machine without moving production traffic.</h2><p>Step 13 uses an isolated simulation adapter and the exact held nnn build. Only one canary may be active platform-wide, health must pass before the rollback clock begins, and a failed health drill automatically restores the frozen legacy snapshot.</p></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 14 · REAL STAGING EDGE + CUTOVER MONITOR</p><h2>The proven canary state machine now has a real HTTPS reverse-proxy adapter for an isolated staging hostname.</h2><p>Step 14 serves the exact held nnn build through its own staging Caddy process, verifies runtime/site identity over HTTPS and persists monitor state in PostgreSQL so a Site Manager restart resumes health supervision instead of forgetting the active rehearsal.</p></div></section>
     <section className="v2-grid">
       <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EMAIL</span><h3>{user.email}</h3></div><span className="v2-state good">VERIFIED</span></div><p>Email verification protects the customer control plane.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CANARY</span><h3>Simulation only</h3></div><span className="v2-state good">ISOLATED</span></div><p>There is no live/apply canary mode in Step 13 and migrated sites cannot bypass this gate through ordinary publishing.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in migration or cutover rehearsal.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">STAGING EDGE</span><h3>Dedicated Caddy</h3></div><span className="v2-state good">ISOLATED</span></div><p>Staging has a separate hostname, Caddyfile, admin endpoint, approval flag and runtime token channel.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PAYMENT</span><h3>Designed later</h3></div><span className="v2-state">DEFERRED</span></div><p>No checkout, trial clock or payment gate participates in staging or cutover verification.</p></article>
     </section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Real staging-host execution adapter and cutover monitor</h2><span>Step 14 will take a passed Step 13 canary artifact and add the real staging-host routing/health adapter, post-activation monitoring and rollback mechanics needed before any production customer hostname can be considered.</span></div><div className="v2-step-number">14</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Production cutover adapter and explicit one-site live approval gate</h2><span>Step 15 will build the production-only route execution contract from the now-proven staging adapter, with an explicit operator approval, one migrated site at a time, immediate health verification and rollback protection. It will remain disabled by default until an actual production cutover is explicitly authorized.</span></div><div className="v2-step-number">15</div></section>
   </>;
 }
 
-function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity, onOpenCutover, onOpenCanary }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void; onOpenCutover: () => void; onOpenCanary: () => void }) {
+function OverviewView({ onOpenCurrentManager, onCreateWebsite, onOpenDomains, onOpenDeployments, onOpenMigration, onOpenParity, onOpenCutover, onOpenCanary, onOpenStaging }: { onOpenCurrentManager: () => void; onCreateWebsite: () => void; onOpenDomains: () => void; onOpenDeployments: () => void; onOpenMigration: () => void; onOpenParity: () => void; onOpenCutover: () => void; onOpenCanary: () => void; onOpenStaging: () => void }) {
   return <>
-    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 13 · CANARY CUTOVER EXECUTION + AUTOMATIC ROLLBACK DRILL</p><h2>The production cutover state machine can now be exercised one site at a time without touching production.</h2><p>The simulation controller consumes only a current ARMED immutable plan, validates the exact held nnn canary contract, activates isolated route state, verifies site/runtime evidence and automatically restores the frozen legacy target when health fails. Production traffic remains database-locked.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenCanary}>Open canary drill</button><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
+    <section className="v2-hero-card"><div><p className="v2-kicker">STEP 14 · REAL STAGING-HOST EXECUTION ADAPTER + CUTOVER MONITOR</p><h2>The held nnn runtime can now be exercised behind a dedicated real Caddy/HTTPS staging edge before any customer hostname is touched.</h2><p>A passed Step 13 canary can progress to a staging-only route. Site Manager injects a short-lived runtime credential, validates the exact held nnn contract and site identity through HTTPS, persists the rollback window, resumes monitoring after restarts and automatically removes the staging route after repeated health failure.</p></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button className="v2-primary-button" type="button" onClick={onOpenStaging}>Open staging edge</button><button className="v2-primary-button" type="button" onClick={onOpenCanary}>Open canary drill</button><button className="v2-primary-button" type="button" onClick={onOpenCutover}>Open cutover plans</button><button className="v2-primary-button" type="button" onClick={onOpenParity}>Open readiness</button><button className="v2-primary-button" type="button" onClick={onOpenMigration}>Open migration</button><button className="v2-primary-button" type="button" onClick={onCreateWebsite}>Create website</button><button className="v2-primary-button" type="button" onClick={onOpenDomains}>Open domains</button><button className="v2-primary-button" type="button" onClick={onOpenDeployments}>Open deployments</button><button className="v2-primary-button" type="button" onClick={onOpenCurrentManager}>Open current manager</button></div></section>
     <section className="v2-grid">
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">CANARY</span><h3>One at a time</h3></div><span className="v2-state good">GLOBAL LOCK</span></div><p>A PostgreSQL partial unique index prevents two activating/monitoring canaries from coexisting.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">HEALTH</span><h3>Exact held nnn</h3></div><span className="v2-state good">CONTRACT v1</span></div><p>Publishing, cutover, canary, site identity, hostname and held-runtime SHA checks must pass before monitoring begins.</p></article>
-      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Still unchanged</h3></div><span className="v2-state good">LOCKED</span></div><p>Canary records are simulation-only and cannot represent production traffic movement or a production deployment.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">EDGE</span><h3>Real HTTPS</h3></div><span className="v2-state good">STAGING ONLY</span></div><p>The Step 14 adapter calls real Caddy validate/reload and then requests the shared nnn runtime through HTTPS.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">RECOVERY</span><h3>Persistent monitor</h3></div><span className="v2-state good">RESTART SAFE</span></div><p>PostgreSQL stores the active run, health state and rollback deadline so a Site Manager restart resumes supervision.</p></article>
+      <article className="v2-card"><div className="v2-card-head"><div><span className="v2-card-label">PRODUCTION</span><h3>Still unchanged</h3></div><span className="v2-state good">LOCKED</span></div><p>The staging schema cannot represent production traffic movement or production cutover, and its Caddyfile is separate from customer routes.</p></article>
     </section>
     <section className="v2-section"><div className="v2-section-heading"><div><p>FOUNDATION</p><h2>What is working now</h2></div></div><div className="v2-capability-grid">{capabilities.map(item => <div className="v2-capability" key={item}><span>✓</span><strong>{item}</strong></div>)}</div></section>
-    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Real staging-host execution adapter and cutover monitor</h2><span>Step 14 will convert the proven state machine into a real staging-host adapter with actual reverse-proxy health verification and rollback monitoring, still before any production customer cutover.</span></div><div className="v2-step-number">14</div></section>
+    <section className="v2-next-step"><div><p>NEXT MILESTONE</p><h2>Production cutover adapter and explicit one-site live approval gate</h2><span>Step 15 will translate the proven staging route/health/rollback mechanics into a production-only adapter with stronger explicit authorization. It will remain disabled by default and still operate one migrated site at a time.</span></div><div className="v2-step-number">15</div></section>
   </>;
 }
