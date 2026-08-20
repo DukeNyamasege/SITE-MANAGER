@@ -6,12 +6,26 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   exit 1
 fi
 if [[ $# -ne 1 ]]; then
-  echo "Usage: NNN_CUTOVER_APPROVED=YES bash $0 <approved-git-ref-or-commit>" >&2
+  echo "Usage: NNN_STAGING_APPROVED=YES bash $0 <approved-ref> on staging, or NNN_CUTOVER_APPROVED=YES for final production cutover." >&2
   exit 1
 fi
-if [[ "${NNN_CUTOVER_APPROVED:-NO}" != "YES" ]]; then
-  echo "Refusing to activate nnn. Set NNN_CUTOVER_APPROVED=YES only after explicit final production-cutover approval." >&2
-  exit 1
+
+ENVIRONMENT="${SITE_MANAGER_ENVIRONMENT:-}"
+if [[ -z "$ENVIRONMENT" && -r /etc/site-manager/site-manager.env ]]; then
+  ENVIRONMENT="$(grep '^SITE_MANAGER_ENVIRONMENT=' /etc/site-manager/site-manager.env | tail -n1 | cut -d= -f2- || true)"
+fi
+ENVIRONMENT="${ENVIRONMENT:-production}"
+
+if [[ "$ENVIRONMENT" == "staging" ]]; then
+  if [[ "${NNN_STAGING_APPROVED:-NO}" != "YES" ]]; then
+    echo "Refusing staging nnn activation. Set NNN_STAGING_APPROVED=YES only for the isolated staging host." >&2
+    exit 1
+  fi
+else
+  if [[ "${NNN_CUTOVER_APPROVED:-NO}" != "YES" ]]; then
+    echo "Refusing production nnn activation. Set NNN_CUTOVER_APPROVED=YES only after explicit final production-cutover approval." >&2
+    exit 1
+  fi
 fi
 
 REF="$1"
@@ -49,12 +63,16 @@ npm run build
 
 CONTRACT="$WORK/dist/site-manager-runtime.json"
 [[ -f "$CONTRACT" ]] || { echo "nnn build is missing dist/site-manager-runtime.json." >&2; exit 1; }
-node - "$CONTRACT" <<'NODE'
+SITE_MANAGER_RELEASE_ENV="$ENVIRONMENT" node - "$CONTRACT" <<'NODE'
 const fs = require('node:fs');
 const file = process.argv[2];
 const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
 if (payload.runtime !== 'nnn' || Number(payload.contract_version) !== 2 || payload.deployment_model !== 'shared-static-runtime') {
   throw new Error('nnn release does not satisfy Site Manager publishing contract v2.');
+}
+if (process.env.SITE_MANAGER_RELEASE_ENV === 'staging') {
+  const required = ['rehearsal_contract_version', 'migration_contract_version', 'cutover_contract_version', 'canary_contract_version', 'staging_edge_contract_version'];
+  for (const key of required) if (Number(payload[key]) !== 1) throw new Error(`Staging nnn release is missing ${key}=1.`);
 }
 NODE
 
@@ -65,6 +83,7 @@ cat >"$RELEASE/site-manager-release.json" <<EOF
   "runtime": "nnn",
   "source_sha": "${SHA}",
   "contract_version": 2,
+  "environment": "${ENVIRONMENT}",
   "installed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
@@ -78,9 +97,13 @@ mv -Tf "$NEXT" "$CURRENT"
 write_runtime_env() {
   local release_sha="$1"
   local tmp="/etc/site-manager/runtime.env.$$"
-  cat >"$tmp" <<EOF
-NNN_RUNTIME_RELEASE=${release_sha}
-EOF
+  {
+    printf 'NNN_RUNTIME_RELEASE=%s\n' "$release_sha"
+    if [[ "$ENVIRONMENT" == "staging" ]]; then
+      printf 'NNN_STAGING_RELEASE=%s\n' "$release_sha"
+      printf 'NNN_STAGING_DIST_DIR=/srv/site-manager/nnn/current\n'
+    fi
+  } >"$tmp"
   chown root:site-manager "$tmp"
   chmod 0640 "$tmp"
   mv -f "$tmp" /etc/site-manager/runtime.env
@@ -113,9 +136,7 @@ if systemctl is-enabled site-manager.service >/dev/null 2>&1; then
   fi
 fi
 
-# Optional HTTPS verification of the dedicated preview host. It is deliberately opt-in
-# because DNS/SSL may be staged separately from release installation.
-if [[ "${VERIFY_NNN_PREVIEW_HTTPS:-NO}" == "YES" ]]; then
+if [[ "$ENVIRONMENT" != "staging" && "${VERIFY_NNN_PREVIEW_HTTPS:-NO}" == "YES" ]]; then
   # shellcheck disable=SC1091
   source /etc/site-manager/host.env
   healthy=0
@@ -134,5 +155,5 @@ if [[ "${VERIFY_NNN_PREVIEW_HTTPS:-NO}" == "YES" ]]; then
   fi
 fi
 
-echo "Shared nnn release active: $RELEASE ($SHA)"
-echo "VPS_PUBLISH_MODE is unchanged; customer publishing is still controlled separately."
+echo "Shared nnn ${ENVIRONMENT} release active: $RELEASE ($SHA)"
+echo "Customer production publishing remains controlled separately."
