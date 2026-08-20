@@ -12,10 +12,21 @@ const runtimeSelect = `
          pd.hostname AS managed_hostname, pd.kind AS managed_domain_kind,
          pd.ownership_status AS managed_ownership_status,
          pd.routing_status AS managed_routing_status,
-         pd.ssl_status AS managed_ssl_status
+         pd.ssl_status AS managed_ssl_status,
+         dep.id AS deployment_id, dep.status AS deployment_status_record,
+         dep.runtime_release AS deployment_runtime_release,
+         dep.contract_version AS deployment_contract_version,
+         dep.activated_at AS deployment_activated_at
     FROM websites w
     JOIN website_configs c ON c.website_id = w.id
     LEFT JOIN website_domains pd ON pd.website_id = w.id AND pd.is_primary = TRUE
+    LEFT JOIN LATERAL (
+      SELECT d.id, d.status, d.runtime_release, d.contract_version, d.activated_at
+        FROM website_deployments d
+       WHERE d.website_id = w.id AND d.status = 'active'
+       ORDER BY d.activated_at DESC NULLS LAST, d.created_at DESC
+       LIMIT 1
+    ) dep ON TRUE
 `;
 
 function cleanHost(value) {
@@ -57,6 +68,14 @@ function shapeRuntime(row, mode, previewExpiresAt = null) {
       routing_status: row.managed_routing_status || 'pending',
       ssl_status: row.managed_ssl_status || 'pending',
     },
+    deployment: row.deployment_id ? {
+      id: row.deployment_id,
+      status: row.deployment_status_record,
+      runtime: 'nnn',
+      runtime_release: row.deployment_runtime_release,
+      contract_version: Number(row.deployment_contract_version || 2),
+      activated_at: row.deployment_activated_at,
+    } : null,
     ...(mode === 'preview' ? { preview: { expires_at: previewExpiresAt } } : {}),
   };
 }
@@ -112,13 +131,15 @@ router.get('/site', async (request, response, next) => {
          AND pd.routing_status = 'ready'
          AND pd.ssl_status IN ('eligible', 'provisioned')
          AND w.domain_status = 'connected'
-         AND w.status IN ('ready', 'deploying', 'live')
+         AND w.status = 'live'
+         AND w.deployment_status = 'deployed'
          AND c.configuration_status = 'complete'
+         AND dep.id IS NOT NULL
        LIMIT 1`,
       [host],
     );
     const row = result.rows[0];
-    if (!row) return response.status(404).json({ message: 'No managed runtime configuration exists for this host.' });
+    if (!row) return response.status(404).json({ message: 'No active Site Manager deployment exists for this host.' });
 
     response.setHeader('Cache-Control', 'no-store');
     return response.json(shapeRuntime(row, 'live'));
