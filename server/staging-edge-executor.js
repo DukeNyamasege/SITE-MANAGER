@@ -89,6 +89,7 @@ function baseUrl(settings) {
 function globalBlock(settings) {
   return `{
   admin ${settings.caddyAdmin}
+  auto_https disable_redirects
 }\n\n`;
 }
 
