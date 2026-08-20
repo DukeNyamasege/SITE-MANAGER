@@ -14,15 +14,7 @@ export const NNN_NAVIGATION_CATALOG = [
 ];
 
 export const NNN_DEFAULT_NAVIGATION = NNN_NAVIGATION_CATALOG.map(item => item.id);
-
-export const NNN_DEFAULT_COLORS = {
-  primary: '#059669',
-  secondary: '#19cba3',
-  nav_background: '#151d26',
-  nav_text: '#f3f6f8',
-  header_background: '#ffffff',
-};
-
+export const NNN_DEFAULT_COLORS = { primary: '#059669', secondary: '#19cba3', nav_background: '#151d26', nav_text: '#f3f6f8', header_background: '#ffffff' };
 export const NNN_RECOMMENDED_SCOPES = ['trade', 'application_read'];
 const NAVIGATION_IDS = new Set(NNN_DEFAULT_NAVIGATION);
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
@@ -30,9 +22,7 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 export function normalizeNnnNavigation(value) {
   const source = Array.isArray(value) ? value : NNN_DEFAULT_NAVIGATION;
   const seen = new Set();
-  const normalized = source
-    .map(item => String(item))
-    .filter(item => NAVIGATION_IDS.has(item) && !seen.has(item) && Boolean(seen.add(item)));
+  const normalized = source.map(item => String(item)).filter(item => NAVIGATION_IDS.has(item) && !seen.has(item) && Boolean(seen.add(item)));
   if (!normalized.includes('dashboard')) normalized.unshift('dashboard');
   return normalized.length ? normalized : ['dashboard'];
 }
@@ -55,12 +45,7 @@ export function normalizeDerivScopes(value) {
 }
 
 export function toNnnSiteCustomization(website, config) {
-  return {
-    version: 1,
-    site_id: website.site_key,
-    navigation: normalizeNnnNavigation(config?.navigation),
-    colors: normalizeNnnColors(config?.colors),
-  };
+  return { version: 1, site_id: website.site_key, navigation: normalizeNnnNavigation(config?.navigation), colors: normalizeNnnColors(config?.colors) };
 }
 
 export function toNnnRegistryEntry(website, config) {
@@ -80,7 +65,7 @@ export function toNnnRegistryEntry(website, config) {
   };
 }
 
-export function builderReadiness(website, config) {
+export function builderReadiness(_website, config) {
   const missing = [];
   if (!String(config?.brand_name || '').trim()) missing.push('brand_name');
   if (!normalizeNnnNavigation(config?.navigation).includes('dashboard')) missing.push('dashboard');
@@ -88,7 +73,9 @@ export function builderReadiness(website, config) {
   if (Object.values(colors).some(value => !HEX_COLOR.test(value))) missing.push('colors');
   return {
     configuration_ready: missing.length === 0,
-    deployment_ready: missing.length === 0 && Boolean(website.primary_domain) && Boolean(String(config?.deriv_client_id || '').trim()),
+    // Deployment readiness is authoritative only in /api/v2/domains after Step 6,
+    // because it also requires preview approval, ownership, VPS routing and HTTPS eligibility.
+    deployment_ready: false,
     missing,
   };
 }
