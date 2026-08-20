@@ -108,6 +108,9 @@ jobs:
       - name: Validate Step 14 staging-edge schema
         run: node scripts/validate-staging-edge-schema.mjs
 
+      - name: Validate Step 15 production eligibility schema
+        run: node scripts/validate-production-eligibility-schema.mjs
+
       - name: Check out pinned production nnn migration source
         uses: actions/checkout@v4
         with:
@@ -197,6 +200,13 @@ jobs:
           NNN_STAGING_RELEASE="$NNN_SHA" \
           node scripts/rehearse-staging-edge.mjs
 
+      - name: Rehearse production eligibility and final approval gate
+        env:
+          PRODUCTION_ELIGIBILITY_TTL_MINUTES: 60
+          PRODUCTION_ELIGIBILITY_STAGING_MAX_AGE_MINUTES: 60
+          PRODUCTION_ELIGIBILITY_REHEARSAL_REPORT_PATH: ${{ runner.temp }}/production-eligibility-node-${{ matrix.node-version }}.json
+        run: node scripts/rehearse-production-eligibility.mjs
+
       - name: Validate staging rehearsal safety contract
         run: node scripts/validate-staging-rehearsal.mjs
 
@@ -209,11 +219,11 @@ jobs:
           NNN_REHEARSAL_RELEASE="$NNN_SHA" \
           node scripts/rehearse-staging.mjs
 
-      - name: Upload migration, parity, cutover, canary, staging-edge and lifecycle reports
+      - name: Upload migration, parity, cutover, canary, staging-edge, production-eligibility and lifecycle reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step14-rehearsal-node-${{ matrix.node-version }}
+          name: step15-rehearsal-node-${{ matrix.node-version }}
           path: |
             ${{ runner.temp }}/legacy-nnn-audit-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/dual-run-parity-node-${{ matrix.node-version }}.json
@@ -221,6 +231,7 @@ jobs:
             ${{ runner.temp }}/canary-rehearsal-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/canary-simulation-node-${{ matrix.node-version }}
             ${{ runner.temp }}/staging-edge-rehearsal-node-${{ matrix.node-version }}.json
+            ${{ runner.temp }}/production-eligibility-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/step14-caddy-node-${{ matrix.node-version }}
             ${{ runner.temp }}/site-manager-rehearsals
           if-no-files-found: ignore
