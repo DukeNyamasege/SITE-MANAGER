@@ -62,6 +62,7 @@ EOF
 chown site-manager:site-manager /etc/site-manager/staging/Caddyfile
 chmod 0640 /etc/site-manager/staging/Caddyfile
 
+install -m 0644 "$(dirname "$0")/site-manager.service" /etc/systemd/system/site-manager.service
 install -m 0644 "$(dirname "$0")/site-manager-staging-caddy.service" /etc/systemd/system/site-manager-staging-caddy.service
 
 # The staging VPS uses its own dedicated Caddy process. Never run this installer on
