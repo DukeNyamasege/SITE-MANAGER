@@ -1,0 +1,35 @@
+[Unit]
+Description=Site Manager V2 control plane
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=site-manager
+Group=site-manager
+SupplementaryGroups=site-manager-runtime
+WorkingDirectory=/srv/site-manager/manager/current
+EnvironmentFile=/etc/site-manager/site-manager.env
+EnvironmentFile=/etc/site-manager/database.env
+EnvironmentFile=-/etc/site-manager/runtime.env
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+KillSignal=SIGTERM
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/srv/site-manager/data /etc/caddy/sites
+
+[Install]
+WantedBy=multi-user.target
