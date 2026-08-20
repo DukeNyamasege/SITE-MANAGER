@@ -140,9 +140,11 @@ systemctl enable site-manager.service site-manager-backup.timer
 
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 if [[ "$CADDY_APPLY" == "YES" ]]; then
-  systemctl reload caddy 2>/dev/null || systemctl restart caddy
+  # A restart is intentional on first activation so Caddy receives the newly-added
+  # site-manager-runtime supplementary group before it reads shared runtime/routes.
+  systemctl restart caddy
 else
-  echo "Caddy configuration validated but was not reloaded. Set CADDY_APPLY=YES only during an intentional host cutover."
+  echo "Caddy configuration validated but was not activated. Set CADDY_APPLY=YES only during an intentional host cutover."
 fi
 
 echo "VPS filesystem and service layout prepared."
