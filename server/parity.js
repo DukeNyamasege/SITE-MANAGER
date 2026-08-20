@@ -66,35 +66,32 @@ function shapeWebsite(row) {
 router.get('/', async (request, response, next) => {
   try {
     const result = await query(
-      `SELECT w.id, w.name, w.site_key, w.source, w.status, w.primary_domain,
-              w.domain_status, w.deployment_status, w.preview_approved_at,
-              i.drift_status, i.source_commit, i.source_fingerprint,
-              p.status AS stored_parity_status, p.checked_at
+      `SELECT w.id
          FROM websites w
          JOIN legacy_nnn_site_imports i ON i.website_id = w.id AND i.status = 'assigned'
-         LEFT JOIN legacy_nnn_parity_reports p ON p.website_id = w.id
         WHERE w.owner_user_id = $1 AND w.status <> 'archived'
         ORDER BY w.name ASC`,
       [request.authUser.id],
     );
-    return response.json({
-      websites: result.rows.map(row => ({
-        id: row.id,
-        name: row.name,
-        site_key: row.site_key,
-        source: row.source,
-        status: row.status,
-        primary_domain: row.primary_domain,
-        domain_status: row.domain_status,
-        deployment_status: row.deployment_status,
-        preview_approved_at: row.preview_approved_at,
-        drift_status: row.drift_status,
-        source_commit: row.source_commit,
-        source_fingerprint: row.source_fingerprint,
-        stored_parity_status: row.stored_parity_status || 'not_checked',
-        checked_at: row.checked_at,
-      })),
-    });
+
+    const websites = [];
+    for (const row of result.rows) {
+      const context = await parityContext(row.id, request.authUser.id);
+      if (!context?.importItem) continue;
+      const parity = evaluateDualRunParity(context);
+      websites.push({
+        ...shapeWebsite(context.website),
+        drift_status: context.importItem.drift_status,
+        source_commit: context.importItem.source_commit,
+        source_fingerprint: context.importItem.source_fingerprint,
+        parity_status: parity.status,
+        cutover_ready: parity.cutover_ready,
+        stored_parity_status: context.parityReport?.status || 'not_checked',
+        checked_at: context.parityReport?.checked_at || null,
+      });
+    }
+
+    return response.json({ websites });
   } catch (error) { return next(error); }
 });
 
