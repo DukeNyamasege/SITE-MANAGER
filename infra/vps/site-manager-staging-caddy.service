@@ -1,0 +1,23 @@
+[Unit]
+Description=Site Manager isolated staging Caddy edge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+SupplementaryGroups=site-manager site-manager-runtime
+ExecStart=/usr/bin/caddy run --environ --config /etc/site-manager/staging/Caddyfile --adapter caddyfile
+ExecReload=/usr/bin/caddy reload --config /etc/site-manager/staging/Caddyfile --adapter caddyfile --address 127.0.0.1:2020
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/caddy /var/log/caddy /etc/site-manager/staging
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

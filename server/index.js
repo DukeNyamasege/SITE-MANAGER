@@ -8,6 +8,7 @@ import authRouter from './auth.js';
 import adminRouter from './admin.js';
 import cutoverRouter from './cutover.js';
 import canaryRouter from './canary.js';
+import stagingEdgeRouter from './staging-edge.js';
 import websitesRouter from './websites.js';
 import builderRouter from './builder.js';
 import previewRouter from './preview.js';
@@ -17,6 +18,7 @@ import deploymentsRouter from './deployments.js';
 import parityRouter from './parity.js';
 import { uploadsRoot } from './uploads.js';
 import { getPool } from './db.js';
+import { startStagingEdgeMonitor, stopStagingEdgeMonitor } from './staging-edge-monitor.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
@@ -86,6 +88,7 @@ app.use('/api/v2/deployments', websiteMutationLimiter, deploymentsRouter);
 app.use('/api/v2/parity', websiteMutationLimiter, parityRouter);
 app.use('/api/v2/admin/cutover', websiteMutationLimiter, cutoverRouter);
 app.use('/api/v2/admin/canary', websiteMutationLimiter, canaryRouter);
+app.use('/api/v2/admin/staging-edge', websiteMutationLimiter, stagingEdgeRouter);
 app.use('/api/v2/admin', websiteMutationLimiter, adminRouter);
 
 if (process.env.NODE_ENV === 'production') {
@@ -105,10 +108,12 @@ app.use((error, _request, response, _next) => {
 
 const server = app.listen(port, () => {
   console.log(`Site Manager VPS server listening on port ${port}`);
+  startStagingEdgeMonitor();
 });
 
 async function shutdown(signal) {
   console.log(`${signal} received; shutting down Site Manager server.`);
+  stopStagingEdgeMonitor();
   server.close(async () => {
     try { await getPool().end(); } catch {}
     process.exit(0);
