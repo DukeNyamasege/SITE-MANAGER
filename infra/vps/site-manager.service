@@ -10,6 +10,7 @@ Group=site-manager
 SupplementaryGroups=site-manager-runtime
 WorkingDirectory=/srv/site-manager/manager/current
 EnvironmentFile=/etc/site-manager/site-manager.env
+EnvironmentFile=/etc/site-manager/database.env
 EnvironmentFile=-/etc/site-manager/runtime.env
 ExecStart=/usr/bin/node server/index.js
 Restart=on-failure
