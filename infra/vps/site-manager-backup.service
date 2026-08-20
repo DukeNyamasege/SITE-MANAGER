@@ -7,5 +7,6 @@ Type=oneshot
 User=site-manager
 Group=site-manager
 EnvironmentFile=/etc/site-manager/site-manager.env
-ExecStart=/srv/site-manager/manager/current/infra/vps/backup-state.sh
+EnvironmentFile=/etc/site-manager/database.env
+ExecStart=/usr/bin/bash /srv/site-manager/manager/current/infra/vps/backup-state.sh
 UMask=0077
