@@ -8,9 +8,14 @@ const router = express.Router();
 const runtimeSelect = `
   SELECT w.id, w.site_key, w.name, w.status, w.primary_domain, w.domain_status,
          c.brand_name, c.tagline, c.logo_url, c.navigation, c.colors,
-         c.deriv_client_id, c.deriv_scopes, c.deriv_environment, c.configuration_status
+         c.deriv_client_id, c.deriv_scopes, c.deriv_environment, c.configuration_status,
+         pd.hostname AS managed_hostname, pd.kind AS managed_domain_kind,
+         pd.ownership_status AS managed_ownership_status,
+         pd.routing_status AS managed_routing_status,
+         pd.ssl_status AS managed_ssl_status
     FROM websites w
     JOIN website_configs c ON c.website_id = w.id
+    LEFT JOIN website_domains pd ON pd.website_id = w.id AND pd.is_primary = TRUE
 `;
 
 function cleanHost(value) {
@@ -24,7 +29,7 @@ function cleanHost(value) {
 }
 
 function shapeRuntime(row, mode, previewExpiresAt = null) {
-  const primaryDomain = cleanHost(row.primary_domain);
+  const primaryDomain = cleanHost(row.managed_hostname || row.primary_domain);
   return {
     version: 1,
     mode,
@@ -45,6 +50,12 @@ function shapeRuntime(row, mode, previewExpiresAt = null) {
       client_id: row.deriv_client_id || '',
       scopes: normalizeDerivScopes(row.deriv_scopes),
       environment: row.deriv_environment === 'staging' ? 'staging' : 'production',
+    },
+    routing: {
+      domain_kind: row.managed_domain_kind || null,
+      ownership_status: row.managed_ownership_status || 'pending',
+      routing_status: row.managed_routing_status || 'pending',
+      ssl_status: row.managed_ssl_status || 'pending',
     },
     ...(mode === 'preview' ? { preview: { expires_at: previewExpiresAt } } : {}),
   };
@@ -95,7 +106,11 @@ router.get('/site', async (request, response, next) => {
 
     const result = await query(
       `${runtimeSelect}
-       WHERE LOWER(REGEXP_REPLACE(COALESCE(w.primary_domain, ''), '^www\\.', '')) = $1
+       WHERE LOWER(REGEXP_REPLACE(COALESCE(pd.hostname, w.primary_domain, ''), '^www\\.', '')) = $1
+         AND pd.is_primary = TRUE
+         AND pd.ownership_status IN ('verified', 'not_required')
+         AND pd.routing_status = 'ready'
+         AND pd.ssl_status IN ('eligible', 'provisioned')
          AND w.domain_status = 'connected'
          AND w.status IN ('ready', 'deploying', 'live')
          AND c.configuration_status = 'complete'
