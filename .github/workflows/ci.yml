@@ -13,7 +13,7 @@ jobs:
   verify:
     name: Verify Node.js ${{ matrix.node-version }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -44,7 +44,7 @@ jobs:
       SITE_MANAGER_API_UPSTREAM: http://127.0.0.1:8787
 
     steps:
-      - name: Check out repository
+      - name: Check out Site Manager
         uses: actions/checkout@v4
 
       - name: Set up Node.js ${{ matrix.node-version }}
@@ -52,7 +52,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Install dependencies
+      - name: Install Site Manager dependencies
         run: npm install --no-audit --no-fund
 
       - name: Validate legacy Netlify functions
@@ -71,7 +71,7 @@ jobs:
         run: |
           while IFS= read -r -d '' file; do
             bash -n "$file"
-          done < <(find infra/vps -type f -name '*.sh' -print0)
+          done < <(find infra -type f -name '*.sh' -print0)
 
       - name: Validate nnn builder contract
         run: node scripts/validate-nnn-contract.mjs
@@ -91,5 +91,41 @@ jobs:
       - name: Validate VPS publishing schema
         run: node scripts/validate-vps-publishing-schema.mjs
 
-      - name: Build production bundle
+      - name: Build Site Manager production bundle
         run: npm run build
+
+      - name: Check out held nnn staging integration
+        uses: actions/checkout@v4
+        with:
+          repository: DukeNyamasege/nnn
+          ref: hold/site-manager-v2-integration-2026-08-20
+          path: .staging/nnn
+
+      - name: Build and validate held nnn artifact
+        run: |
+          cd .staging/nnn
+          npm ci
+          npm run generate:brand-css
+          node scripts/validate-site-manager-rehearsal.js
+          npm run build
+          node scripts/validate-site-manager-release-artifact.js
+
+      - name: Validate staging rehearsal safety contract
+        run: node scripts/validate-staging-rehearsal.mjs
+
+      - name: Run full Site Manager and nnn staging rehearsal
+        env:
+          STAGING_REHEARSAL_REPORT_DIR: ${{ runner.temp }}/site-manager-rehearsals
+        run: |
+          NNN_SHA="$(git -C .staging/nnn rev-parse HEAD)"
+          NNN_REHEARSAL_DIST_DIR="$PWD/.staging/nnn/dist" \
+          NNN_REHEARSAL_RELEASE="$NNN_SHA" \
+          node scripts/rehearse-staging.mjs
+
+      - name: Upload staging rehearsal report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-rehearsal-node-${{ matrix.node-version }}
+          path: ${{ runner.temp }}/site-manager-rehearsals
+          if-no-files-found: ignore
