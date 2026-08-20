@@ -12,6 +12,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "legacy:audit": "node scripts/import-legacy-nnn.mjs",
     "legacy:import": "node scripts/import-legacy-nnn.mjs --apply",
+    "parity:audit": "node scripts/check-legacy-parity.mjs",
     "admin:promote": "node scripts/promote-admin.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"

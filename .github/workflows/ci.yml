@@ -130,6 +130,15 @@ jobs:
           npm run build
           node scripts/validate-site-manager-release-artifact.js
 
+      - name: Rehearse dual-run parity and cutover readiness
+        env:
+          NNN_LEGACY_SOURCE_DIR: ${{ github.workspace }}/.legacy/nnn
+          NNN_HELD_RUNTIME_DIR: ${{ github.workspace }}/.staging/nnn
+          DUAL_RUN_PARITY_REPORT_PATH: ${{ runner.temp }}/dual-run-parity-node-${{ matrix.node-version }}.json
+        run: |
+          export NNN_HELD_EXPECTED_SHA="$(git -C .staging/nnn rev-parse HEAD)"
+          node scripts/rehearse-dual-run-parity.mjs
+
       - name: Validate staging rehearsal safety contract
         run: node scripts/validate-staging-rehearsal.mjs
 
@@ -142,12 +151,13 @@ jobs:
           NNN_REHEARSAL_RELEASE="$NNN_SHA" \
           node scripts/rehearse-staging.mjs
 
-      - name: Upload migration and staging reports
+      - name: Upload migration, parity and staging reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step10-rehearsal-node-${{ matrix.node-version }}
+          name: step11-rehearsal-node-${{ matrix.node-version }}
           path: |
             ${{ runner.temp }}/legacy-nnn-audit-node-${{ matrix.node-version }}.json
+            ${{ runner.temp }}/dual-run-parity-node-${{ matrix.node-version }}.json
             ${{ runner.temp }}/site-manager-rehearsals
           if-no-files-found: ignore
