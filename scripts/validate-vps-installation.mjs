@@ -56,7 +56,9 @@ const nnn = read('infra/vps/release-nnn.sh');
 assert.match(nnn, /NNN_CUTOVER_APPROVED/);
 assert.match(nnn, /contract_version\) !== 2|contract_version\)!==2/);
 assert.match(nnn, /shared-static-runtime/);
-assert.match(nnn, /\/srv\/site-manager\/nnn/);
+assert.match(nnn, /ROOT=\/srv\/site-manager/);
+assert.match(nnn, /RELEASE_ROOT="\$ROOT\/nnn\/releases"/);
+assert.match(nnn, /CURRENT="\$ROOT\/nnn\/current"/);
 assert.ok(!nnn.includes('git checkout main'), 'nnn release must never silently choose main.');
 assert.ok(!nnn.includes('NNN_CUTOVER_APPROVED=YES\n'), 'Release script must not self-enable cutover approval.');
 
