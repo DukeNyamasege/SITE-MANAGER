@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Site Manager backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=900
+Unit=site-manager-backup.service
+
+[Install]
+WantedBy=timers.target
