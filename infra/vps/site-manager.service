@@ -29,7 +29,7 @@ ProtectKernelLogs=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-ReadWritePaths=/srv/site-manager/data /etc/caddy/sites
+ReadWritePaths=/srv/site-manager/data /etc/caddy/sites -/etc/site-manager/staging
 
 [Install]
 WantedBy=multi-user.target
